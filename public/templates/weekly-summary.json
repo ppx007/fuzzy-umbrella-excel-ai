@@ -1,0 +1,193 @@
+{
+  "id": "weekly-summary",
+  "name": "周报表-汇总版",
+  "description": "每周考勤汇总表，按员工统计一周的出勤情况",
+  "type": "WEEKLY_SUMMARY",
+  "version": "1.0.0",
+  "author": "System",
+  "headers": [
+    {
+      "key": "index",
+      "label": "序号",
+      "width": 50,
+      "align": "center"
+    },
+    {
+      "key": "employeeId",
+      "label": "工号",
+      "width": 80,
+      "align": "center"
+    },
+    {
+      "key": "name",
+      "label": "姓名",
+      "width": 80,
+      "align": "center"
+    },
+    {
+      "key": "department",
+      "label": "部门",
+      "width": 100,
+      "align": "center"
+    },
+    {
+      "key": "monday",
+      "label": "周一",
+      "width": 60,
+      "align": "center",
+      "type": "status"
+    },
+    {
+      "key": "tuesday",
+      "label": "周二",
+      "width": 60,
+      "align": "center",
+      "type": "status"
+    },
+    {
+      "key": "wednesday",
+      "label": "周三",
+      "width": 60,
+      "align": "center",
+      "type": "status"
+    },
+    {
+      "key": "thursday",
+      "label": "周四",
+      "width": 60,
+      "align": "center",
+      "type": "status"
+    },
+    {
+      "key": "friday",
+      "label": "周五",
+      "width": 60,
+      "align": "center",
+      "type": "status"
+    },
+    {
+      "key": "saturday",
+      "label": "周六",
+      "width": 60,
+      "align": "center",
+      "type": "status"
+    },
+    {
+      "key": "sunday",
+      "label": "周日",
+      "width": 60,
+      "align": "center",
+      "type": "status"
+    },
+    {
+      "key": "normalDays",
+      "label": "正常(天)",
+      "width": 70,
+      "align": "center"
+    },
+    {
+      "key": "lateDays",
+      "label": "迟到(次)",
+      "width": 70,
+      "align": "center"
+    },
+    {
+      "key": "earlyLeaveDays",
+      "label": "早退(次)",
+      "width": 70,
+      "align": "center"
+    },
+    {
+      "key": "absentDays",
+      "label": "缺勤(天)",
+      "width": 70,
+      "align": "center"
+    },
+    {
+      "key": "leaveDays",
+      "label": "请假(天)",
+      "width": 70,
+      "align": "center"
+    },
+    {
+      "key": "overtimeHours",
+      "label": "加班(时)",
+      "width": 70,
+      "align": "center"
+    },
+    {
+      "key": "attendanceRate",
+      "label": "出勤率",
+      "width": 70,
+      "align": "center",
+      "format": "percentage"
+    }
+  ],
+  "styles": {
+    "header": {
+      "backgroundColor": "#0078d4",
+      "fontColor": "#ffffff",
+      "fontSize": 12,
+      "fontWeight": "bold",
+      "textAlign": "center",
+      "border": {
+        "top": { "style": "thin", "color": "#000000" },
+        "bottom": { "style": "thin", "color": "#000000" },
+        "left": { "style": "thin", "color": "#000000" },
+        "right": { "style": "thin", "color": "#000000" }
+      }
+    },
+    "body": {
+      "fontSize": 11,
+      "textAlign": "center",
+      "border": {
+        "top": { "style": "thin", "color": "#d0d0d0" },
+        "bottom": { "style": "thin", "color": "#d0d0d0" },
+        "left": { "style": "thin", "color": "#d0d0d0" },
+        "right": { "style": "thin", "color": "#d0d0d0" }
+      }
+    },
+    "alternateRow": {
+      "backgroundColor": "#f5f5f5"
+    },
+    "weekendColumn": {
+      "backgroundColor": "#fff4ce"
+    },
+    "statusSymbols": {
+      "NORMAL": "✓",
+      "LATE": "迟",
+      "EARLY_LEAVE": "早",
+      "ABSENT": "×",
+      "LEAVE": "假",
+      "OVERTIME": "加",
+      "OUT": "外",
+      "BUSINESS_TRIP": "出",
+      "REST_DAY": "休",
+      "HOLIDAY": "节"
+    },
+    "statusColors": {
+      "NORMAL": "#107c10",
+      "LATE": "#ff8c00",
+      "EARLY_LEAVE": "#ff8c00",
+      "ABSENT": "#d13438",
+      "LEAVE": "#0078d4",
+      "OVERTIME": "#8764b8",
+      "OUT": "#00bcf2",
+      "BUSINESS_TRIP": "#00bcf2",
+      "REST_DAY": "#767676",
+      "HOLIDAY": "#767676"
+    }
+  },
+  "options": {
+    "showTitle": true,
+    "titleFormat": "{startDate} 至 {endDate} 周考勤汇总表",
+    "showStatistics": true,
+    "statisticsPosition": "bottom",
+    "freezeHeader": true,
+    "freezeColumns": 4,
+    "autoFilter": true,
+    "showLegend": true
+  },
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}

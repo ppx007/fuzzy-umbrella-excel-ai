@@ -1,0 +1,211 @@
+{
+  "id": "monthly-summary",
+  "name": "月报表-汇总版",
+  "description": "每月考勤汇总表，统计员工整月的出勤数据",
+  "type": "MONTHLY_SUMMARY",
+  "version": "1.0.0",
+  "author": "System",
+  "headers": [
+    {
+      "key": "index",
+      "label": "序号",
+      "width": 50,
+      "align": "center"
+    },
+    {
+      "key": "employeeId",
+      "label": "工号",
+      "width": 80,
+      "align": "center"
+    },
+    {
+      "key": "name",
+      "label": "姓名",
+      "width": 80,
+      "align": "center"
+    },
+    {
+      "key": "department",
+      "label": "部门",
+      "width": 100,
+      "align": "center"
+    },
+    {
+      "key": "position",
+      "label": "职位",
+      "width": 100,
+      "align": "center"
+    },
+    {
+      "key": "workDays",
+      "label": "应出勤",
+      "width": 70,
+      "align": "center"
+    },
+    {
+      "key": "actualDays",
+      "label": "实出勤",
+      "width": 70,
+      "align": "center"
+    },
+    {
+      "key": "normalDays",
+      "label": "正常",
+      "width": 60,
+      "align": "center"
+    },
+    {
+      "key": "lateTimes",
+      "label": "迟到",
+      "width": 60,
+      "align": "center"
+    },
+    {
+      "key": "earlyLeaveTimes",
+      "label": "早退",
+      "width": 60,
+      "align": "center"
+    },
+    {
+      "key": "absentDays",
+      "label": "缺勤",
+      "width": 60,
+      "align": "center"
+    },
+    {
+      "key": "sickLeaveDays",
+      "label": "病假",
+      "width": 60,
+      "align": "center"
+    },
+    {
+      "key": "personalLeaveDays",
+      "label": "事假",
+      "width": 60,
+      "align": "center"
+    },
+    {
+      "key": "annualLeaveDays",
+      "label": "年假",
+      "width": 60,
+      "align": "center"
+    },
+    {
+      "key": "otherLeaveDays",
+      "label": "其他假",
+      "width": 60,
+      "align": "center"
+    },
+    {
+      "key": "businessTripDays",
+      "label": "出差",
+      "width": 60,
+      "align": "center"
+    },
+    {
+      "key": "overtimeHours",
+      "label": "加班(时)",
+      "width": 70,
+      "align": "center"
+    },
+    {
+      "key": "totalWorkHours",
+      "label": "总工时",
+      "width": 70,
+      "align": "center"
+    },
+    {
+      "key": "attendanceRate",
+      "label": "出勤率",
+      "width": 70,
+      "align": "center",
+      "format": "percentage"
+    },
+    {
+      "key": "remark",
+      "label": "备注",
+      "width": 120,
+      "align": "left"
+    }
+  ],
+  "styles": {
+    "header": {
+      "backgroundColor": "#0078d4",
+      "fontColor": "#ffffff",
+      "fontSize": 12,
+      "fontWeight": "bold",
+      "textAlign": "center",
+      "border": {
+        "top": { "style": "thin", "color": "#000000" },
+        "bottom": { "style": "thin", "color": "#000000" },
+        "left": { "style": "thin", "color": "#000000" },
+        "right": { "style": "thin", "color": "#000000" }
+      }
+    },
+    "body": {
+      "fontSize": 11,
+      "textAlign": "center",
+      "border": {
+        "top": { "style": "thin", "color": "#d0d0d0" },
+        "bottom": { "style": "thin", "color": "#d0d0d0" },
+        "left": { "style": "thin", "color": "#d0d0d0" },
+        "right": { "style": "thin", "color": "#d0d0d0" }
+      }
+    },
+    "alternateRow": {
+      "backgroundColor": "#f5f5f5"
+    },
+    "summaryRow": {
+      "backgroundColor": "#e6f2ff",
+      "fontWeight": "bold"
+    },
+    "conditionalFormats": [
+      {
+        "column": "attendanceRate",
+        "condition": "< 0.9",
+        "style": {
+          "fontColor": "#d13438",
+          "fontWeight": "bold"
+        }
+      },
+      {
+        "column": "attendanceRate",
+        "condition": ">= 0.95",
+        "style": {
+          "fontColor": "#107c10",
+          "fontWeight": "bold"
+        }
+      },
+      {
+        "column": "lateTimes",
+        "condition": "> 3",
+        "style": {
+          "fontColor": "#ff8c00",
+          "fontWeight": "bold"
+        }
+      },
+      {
+        "column": "absentDays",
+        "condition": "> 0",
+        "style": {
+          "fontColor": "#d13438",
+          "fontWeight": "bold"
+        }
+      }
+    ]
+  },
+  "options": {
+    "showTitle": true,
+    "titleFormat": "{year}年{month}月 考勤月报表",
+    "showStatistics": true,
+    "statisticsPosition": "bottom",
+    "showDepartmentSummary": true,
+    "freezeHeader": true,
+    "freezeColumns": 4,
+    "autoFilter": true,
+    "showChart": true,
+    "chartType": "bar"
+  },
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}

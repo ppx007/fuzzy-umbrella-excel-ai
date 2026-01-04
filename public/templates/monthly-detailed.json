@@ -1,0 +1,165 @@
+{
+  "id": "monthly-detailed",
+  "name": "月报表-详细版",
+  "description": "详细的每月考勤表，显示每天的出勤状态",
+  "type": "MONTHLY_DETAILED",
+  "version": "1.0.0",
+  "author": "System",
+  "headers": [
+    {
+      "key": "index",
+      "label": "序号",
+      "width": 40,
+      "align": "center"
+    },
+    {
+      "key": "employeeId",
+      "label": "工号",
+      "width": 70,
+      "align": "center"
+    },
+    {
+      "key": "name",
+      "label": "姓名",
+      "width": 70,
+      "align": "center"
+    },
+    {
+      "key": "department",
+      "label": "部门",
+      "width": 80,
+      "align": "center"
+    }
+  ],
+  "dynamicHeaders": {
+    "type": "days",
+    "format": "{day}",
+    "width": 30,
+    "align": "center"
+  },
+  "summaryHeaders": [
+    {
+      "key": "normalDays",
+      "label": "正常",
+      "width": 45,
+      "align": "center"
+    },
+    {
+      "key": "lateTimes",
+      "label": "迟到",
+      "width": 45,
+      "align": "center"
+    },
+    {
+      "key": "absentDays",
+      "label": "缺勤",
+      "width": 45,
+      "align": "center"
+    },
+    {
+      "key": "leaveDays",
+      "label": "请假",
+      "width": 45,
+      "align": "center"
+    },
+    {
+      "key": "attendanceRate",
+      "label": "出勤率",
+      "width": 55,
+      "align": "center",
+      "format": "percentage"
+    }
+  ],
+  "styles": {
+    "header": {
+      "backgroundColor": "#0078d4",
+      "fontColor": "#ffffff",
+      "fontSize": 10,
+      "fontWeight": "bold",
+      "textAlign": "center",
+      "border": {
+        "top": { "style": "thin", "color": "#000000" },
+        "bottom": { "style": "thin", "color": "#000000" },
+        "left": { "style": "thin", "color": "#000000" },
+        "right": { "style": "thin", "color": "#000000" }
+      }
+    },
+    "dayHeader": {
+      "backgroundColor": "#106ebe",
+      "fontColor": "#ffffff",
+      "fontSize": 9,
+      "fontWeight": "bold",
+      "textAlign": "center"
+    },
+    "weekendHeader": {
+      "backgroundColor": "#605e5c",
+      "fontColor": "#ffffff",
+      "fontSize": 9,
+      "fontWeight": "bold",
+      "textAlign": "center"
+    },
+    "body": {
+      "fontSize": 9,
+      "textAlign": "center",
+      "border": {
+        "top": { "style": "thin", "color": "#e0e0e0" },
+        "bottom": { "style": "thin", "color": "#e0e0e0" },
+        "left": { "style": "thin", "color": "#e0e0e0" },
+        "right": { "style": "thin", "color": "#e0e0e0" }
+      }
+    },
+    "alternateRow": {
+      "backgroundColor": "#fafafa"
+    },
+    "weekendColumn": {
+      "backgroundColor": "#f0f0f0"
+    },
+    "statusSymbols": {
+      "NORMAL": "√",
+      "LATE": "迟",
+      "EARLY_LEAVE": "早",
+      "ABSENT": "×",
+      "LEAVE": "假",
+      "OVERTIME": "加",
+      "OUT": "外",
+      "BUSINESS_TRIP": "出",
+      "REST_DAY": "-",
+      "HOLIDAY": "节"
+    },
+    "statusColors": {
+      "NORMAL": "#107c10",
+      "LATE": "#ff8c00",
+      "EARLY_LEAVE": "#ff8c00",
+      "ABSENT": "#d13438",
+      "LEAVE": "#0078d4",
+      "OVERTIME": "#8764b8",
+      "OUT": "#00bcf2",
+      "BUSINESS_TRIP": "#00bcf2",
+      "REST_DAY": "#a0a0a0",
+      "HOLIDAY": "#767676"
+    },
+    "summaryColumn": {
+      "backgroundColor": "#e6f2ff",
+      "fontWeight": "bold"
+    }
+  },
+  "options": {
+    "showTitle": true,
+    "titleFormat": "{year}年{month}月 考勤明细表",
+    "showStatistics": true,
+    "statisticsPosition": "bottom",
+    "showDepartmentSummary": true,
+    "freezeHeader": true,
+    "freezeColumns": 4,
+    "autoFilter": false,
+    "showLegend": true,
+    "legendPosition": "bottom",
+    "printSettings": {
+      "orientation": "landscape",
+      "fitToPage": true,
+      "repeatHeader": true
+    }
+  },
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}
