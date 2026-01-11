@@ -25,6 +25,26 @@ export const intentRules: IntentRule[] = [
     baseConfidence: 0.8,
   },
 
+  // 创建通用表格
+  {
+    id: 'create_generic_table',
+    intent: AttendanceIntent.CREATE_GENERIC_TABLE,
+    patterns: [
+      /创建.*表/,
+      /生成.*表/,
+      /制作.*表/,
+      /创建.*表格/,
+      /生成.*表格/,
+      /制作.*表格/,
+      /创建.*数据/,
+      /生成.*数据/,
+      /制作.*数据/,
+    ],
+    requiredKeywords: ['创建', '生成', '制作', '表', '表格', '数据'],
+    priority: 9,
+    baseConfidence: 0.85,
+  },
+
   // 创建周报
   {
     id: 'create_weekly',
@@ -99,6 +119,62 @@ export const intentRules: IntentRule[] = [
     requiredKeywords: ['修改', '编辑', '更改', '调整', '模板'],
     priority: 7,
     baseConfidence: 0.75,
+  },
+
+  // 修改表格
+  {
+    id: 'modify_table',
+    intent: AttendanceIntent.MODIFY_TABLE,
+    patterns: [
+      /修改.*表/,
+      /编辑.*表/,
+      /更改.*表/,
+      /调整.*表/,
+      /更新.*表/,
+      /修改.*表格/,
+      /编辑.*表格/,
+      /更改.*表格/,
+      /调整.*表格/,
+      /更新.*表格/,
+      /插入.*列/,
+      /删除.*列/,
+      /增加.*行/,
+      /添加.*公式/,
+    ],
+    requiredKeywords: [
+      '修改',
+      '编辑',
+      '更改',
+      '调整',
+      '更新',
+      '表',
+      '表格',
+      '插入',
+      '删除',
+      '增加',
+      '添加',
+    ],
+    priority: 8,
+    baseConfidence: 0.8,
+  },
+
+  // 修改图表
+  {
+    id: 'modify_chart',
+    intent: AttendanceIntent.MODIFY_CHART,
+    patterns: [
+      /修改.*图/,
+      /编辑.*图/,
+      /更改.*图/,
+      /调整.*图/,
+      /更新.*图/,
+      /图表.*类型/,
+      /图表.*颜色/,
+      /图表.*标题/,
+    ],
+    requiredKeywords: ['修改', '编辑', '更改', '调整', '更新', '图', '图表'],
+    priority: 8,
+    baseConfidence: 0.8,
   },
 
   // 查询统计
@@ -245,6 +321,9 @@ export function getIntentDescription(intent: AttendanceIntent): string {
     [AttendanceIntent.MODIFY_TEMPLATE]: '修改模板',
     [AttendanceIntent.QUERY_ATTENDANCE]: '查询考勤记录',
     [AttendanceIntent.EXPORT_REPORT]: '导出报表',
+    [AttendanceIntent.CREATE_GENERIC_TABLE]: '创建通用表格',
+    [AttendanceIntent.MODIFY_TABLE]: '修改表格',
+    [AttendanceIntent.MODIFY_CHART]: '修改图表',
     [AttendanceIntent.UNKNOWN]: '未知操作',
   };
 
@@ -268,6 +347,15 @@ export function getIntentExamples(intent: AttendanceIntent): string[] {
     [AttendanceIntent.MODIFY_TEMPLATE]: ['修改考勤模板', '编辑表格样式', '调整模板设置'],
     [AttendanceIntent.QUERY_ATTENDANCE]: ['查询考勤记录', '查看本月考勤', '显示考勤情况'],
     [AttendanceIntent.EXPORT_REPORT]: ['导出考勤报表', '生成月度报告', '下载考勤报表'],
+    [AttendanceIntent.CREATE_GENERIC_TABLE]: ['创建销售数据表', '生成员工信息表', '制作项目进度表'],
+    [AttendanceIntent.MODIFY_TABLE]: [
+      '修改表格结构',
+      '添加新列',
+      '删除某列数据',
+      '在A列后插入一列',
+      '添加求和公式',
+    ],
+    [AttendanceIntent.MODIFY_CHART]: ['修改图表类型为折线图', '更改图表标题', '修改图表颜色为红色'],
     [AttendanceIntent.UNKNOWN]: [],
   };
 

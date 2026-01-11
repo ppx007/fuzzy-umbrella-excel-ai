@@ -1,6 +1,6 @@
 /*
  * @Author: error: error: git config user.name & please set dead value or install git && error: git config user.email & please set dead value or install git & please set dead value or install git
- * @LastEditTime: 2026-01-03 12:16:23
+ * @LastEditTime: 2026-01-11 10:07:23
  * @LastEditors: px007
  * @ FilePath: Do not edit
  * sa~ka~na~
@@ -32,3 +32,9 @@ export * from './useTemplate';
 
 // V3 新增：设置管理
 export * from './useSettings';
+
+// V4 新增：模型管理
+export * from './useModels';
+
+// V5 新增：API预设管理
+export * from './useApiPresets';

@@ -324,8 +324,10 @@ export type ExtendedColumnType =
  * 通用表格列定义
  */
 export interface GenericTableColumn {
-  /** 列名称（显示名称） */
-  name: string;
+  /** 列键名（英文，用于数据映射） */
+  key: string;
+  /** 列标题（显示名称） */
+  title: string;
   /** 数据类型 */
   type: ExtendedColumnType;
   /** 列宽度（可选） */
@@ -797,6 +799,10 @@ export interface ConversationMessage {
   };
   /** 是否正在流式输出 */
   isStreaming?: boolean;
+  /** 是否是错误消息 */
+  isError?: boolean;
+  /** 导致该消息的原始用户输入（用于重试） */
+  originalPrompt?: string;
 }
 
 /**
@@ -849,7 +855,10 @@ export type ChartType =
   | 'area' // 面积图
   | 'scatter' // 散点图
   | 'radar' // 雷达图
-  | 'combo'; // 组合图
+  | 'combo' // 组合图
+  | 'sunburst' // 旭日图（Excel不支持，需要替代）
+  | 'treemap' // 树图（Excel不支持，需要替代）
+  | 'heatmap'; // 热力图（Excel不支持，需要替代）
 
 /**
  * 图表位置
@@ -1014,6 +1023,95 @@ export type ModificationAction =
   | 'split'; // 拆分单元格
 
 /**
+ * 原子操作类型（增量更新专用）
+ */
+export type AtomicOperationType =
+  | 'updateCell' // 更新单个单元格
+  | 'updateRange' // 更新范围（多个单元格）
+  | 'batchUpdate' // 批量更新（优化：多个不连续单元格）
+  | 'insertRow' // 插入行（保留格式）
+  | 'insertColumn' // 插入列（保留格式）
+  | 'deleteRow' // 删除行
+  | 'deleteColumn' // 删除列
+  | 'setFormula' // 设置公式
+  | 'batchFormula' // 批量设置公式
+  | 'sortRange' // 排序（不改变样式）
+  | 'filterRange' // 筛选
+  | 'fillDown' // 向下填充（复制公式/值）
+  | 'fillRight'; // 向右填充
+
+/**
+ * 单元格更新项（用于批量更新）
+ */
+export interface CellUpdate {
+  /** 单元格地址，如 "B3" */
+  address: string;
+  /** 新值 */
+  value: unknown;
+}
+
+/**
+ * 原子操作指令
+ */
+export interface AtomicOperation {
+  /** 操作类型 */
+  type: AtomicOperationType;
+  /** 目标地址（单元格如 "B3"，范围如 "B2:D5"） */
+  target: string;
+  /** 操作参数 */
+  params: {
+    /** 新值（用于 updateCell） */
+    value?: unknown;
+    /** 多个值（用于 updateRange，按行优先顺序） */
+    values?: unknown[][];
+    /** 批量单元格更新（用于 batchUpdate） */
+    cells?: CellUpdate[];
+    /** 公式（用于 setFormula） */
+    formula?: string;
+    /** 批量公式（用于 batchFormula） */
+    formulas?: { address: string; formula: string }[];
+    /** 插入位置（用于 insertRow/insertColumn） */
+    position?: 'before' | 'after';
+    /** 插入数量 */
+    count?: number;
+    /** 排序方向 */
+    sortOrder?: 'asc' | 'desc';
+    /** 排序列（用于 sortRange） */
+    sortColumn?: string;
+    /** 填充源范围（用于 fillDown/fillRight） */
+    sourceRange?: string;
+  };
+  /** 操作描述（用于日志和 UI 显示） */
+  description?: string;
+}
+
+/**
+ * 增量更新请求
+ */
+export interface IncrementalUpdateRequest {
+  /** 表格地址范围 */
+  tableAddress: string;
+  /** 工作表名称 */
+  sheetName: string;
+  /** 操作指令列表 */
+  operations: AtomicOperation[];
+}
+
+/**
+ * 增量更新结果
+ */
+export interface IncrementalUpdateResult {
+  success: boolean;
+  /** 成功执行的操作数 */
+  appliedCount: number;
+  /** 失败的操作（如果有） */
+  failedOperations?: {
+    operation: AtomicOperation;
+    error: string;
+  }[];
+}
+
+/**
  * 表格修改请求
  */
 export interface TableModificationRequest {
@@ -1106,4 +1204,18 @@ export interface RangeDetectionResult {
   tableName?: string;
   /** 检测方法 */
   method: 'selection' | 'usedRange' | 'table' | 'none';
+}
+
+/**
+ * 原子操作执行结果
+ */
+export interface AtomicOperationResult {
+  /** 是否成功 */
+  success: boolean;
+  /** 执行的操作 */
+  operation: AtomicOperation;
+  /** 操作前的原始值（用于撤销） */
+  originalValues?: unknown[][];
+  /** 错误信息 */
+  error?: string;
 }

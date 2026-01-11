@@ -87,19 +87,53 @@ export function useSettings() {
   // 初始化时从环境变量加载 AI 配置
   useEffect(() => {
     const envApiKey = import.meta.env.VITE_OPENAI_API_KEY;
-    const envBaseUrl = import.meta.env.VITE_OPENAI_BASE_URL;
+    // 支持两个变量名: VITE_OPENAI_API_BASE 和 VITE_OPENAI_BASE_URL
+    const envBaseUrl = import.meta.env.VITE_OPENAI_API_BASE || import.meta.env.VITE_OPENAI_BASE_URL;
     const envModel = import.meta.env.VITE_OPENAI_MODEL;
 
+    console.log('[useSettings] 环境变量:', {
+      envApiKey: envApiKey?.substring(0, 6),
+      envBaseUrl,
+      envModel,
+    });
+
+    // 如果有环境变量中配置了模型，优先使用环境变量的模型
+    // 这样可以避免 localStorage 中保存的无效模型导致的问题
     if (envApiKey || envBaseUrl || envModel) {
-      setSettings(prev => ({
-        ...prev,
-        ai: {
-          ...prev.ai,
-          apiKey: envApiKey || prev.ai.apiKey,
-          baseUrl: envBaseUrl || prev.ai.baseUrl,
-          model: envModel || prev.ai.model,
-        },
-      }));
+      setSettings(prev => {
+        // 检测 localStorage 中的模型是否是"search"类型（可能不稳定）
+        const storedModelIsSearch = prev.ai.model?.includes('-search');
+
+        // 如果环境变量指定了模型，且 localStorage 中的模型是 search 类型，则使用环境变量的模型
+        const shouldUseEnvModel = envModel && storedModelIsSearch;
+
+        const needsUpdate =
+          (envApiKey && !prev.ai.apiKey) ||
+          (envBaseUrl && !prev.ai.baseUrl) ||
+          (envModel && !prev.ai.model) ||
+          shouldUseEnvModel;
+
+        if (!needsUpdate) return prev;
+
+        console.log('[useSettings] 更新设置:', {
+          shouldUseEnvModel,
+          storedModel: prev.ai.model,
+          envModel,
+        });
+
+        return {
+          ...prev,
+          ai: {
+            ...prev.ai,
+            apiKey: prev.ai.apiKey || envApiKey || '',
+            baseUrl: prev.ai.baseUrl || envBaseUrl || DEFAULT_SETTINGS.ai.baseUrl,
+            // 如果 localStorage 中是 search 模型且环境变量指定了模型，使用环境变量的
+            model: shouldUseEnvModel
+              ? envModel
+              : prev.ai.model || envModel || DEFAULT_SETTINGS.ai.model,
+          },
+        };
+      });
     }
   }, []);
 

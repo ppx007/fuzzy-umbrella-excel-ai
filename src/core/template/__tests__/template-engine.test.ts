@@ -72,7 +72,7 @@ describe('TemplateEngine', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      
+
       engine.registerTemplate(customTemplate);
       const retrieved = engine.getCustomTemplate('custom-1');
       expect(retrieved).toBeDefined();
@@ -122,9 +122,9 @@ describe('TemplateEngine', () => {
     it('should render daily simple template', () => {
       const template = engine.getTemplate(TemplateType.DAILY_SIMPLE);
       expect(template).toBeDefined();
-      
+
       const result = engine.render(template!, mockContext);
-      
+
       expect(result).toBeDefined();
       expect(result.headers).toBeDefined();
       expect(result.rows).toBeDefined();
@@ -134,9 +134,9 @@ describe('TemplateEngine', () => {
     it('should render daily detailed template', () => {
       const template = engine.getTemplate(TemplateType.DAILY_DETAILED);
       expect(template).toBeDefined();
-      
+
       const result = engine.render(template!, mockContext);
-      
+
       expect(result).toBeDefined();
       expect(result.headers.length).toBeGreaterThan(0);
     });
@@ -144,19 +144,19 @@ describe('TemplateEngine', () => {
     it('should include employee data in rows', () => {
       const template = engine.getTemplate(TemplateType.DAILY_SIMPLE);
       expect(template).toBeDefined();
-      
+
       const result = engine.render(template!, mockContext);
-      
+
       expect(result.rows.length).toBe(mockContext.employees!.length);
     });
 
     it('should handle empty records', () => {
       const template = engine.getTemplate(TemplateType.DAILY_SIMPLE);
       expect(template).toBeDefined();
-      
+
       const contextWithoutRecords = { ...mockContext, records: [] };
       const result = engine.render(template!, contextWithoutRecords);
-      
+
       expect(result).toBeDefined();
       expect(result.rows.length).toBe(mockContext.employees!.length);
     });
@@ -164,10 +164,10 @@ describe('TemplateEngine', () => {
     it('should handle empty employees', () => {
       const template = engine.getTemplate(TemplateType.DAILY_SIMPLE);
       expect(template).toBeDefined();
-      
+
       const contextWithoutEmployees = { ...mockContext, employees: [] };
       const result = engine.render(template!, contextWithoutEmployees);
-      
+
       expect(result).toBeDefined();
       expect(result.rows.length).toBe(0);
     });
@@ -175,9 +175,9 @@ describe('TemplateEngine', () => {
     it('should include styles in result', () => {
       const template = engine.getTemplate(TemplateType.DAILY_SIMPLE);
       expect(template).toBeDefined();
-      
+
       const result = engine.render(template!, mockContext);
-      
+
       expect(result.styles).toBeDefined();
       expect(result.styles.size).toBeGreaterThan(0);
     });
@@ -185,9 +185,9 @@ describe('TemplateEngine', () => {
     it('should calculate column widths', () => {
       const template = engine.getTemplate(TemplateType.DAILY_SIMPLE);
       expect(template).toBeDefined();
-      
+
       const result = engine.render(template!, mockContext);
-      
+
       expect(result.columnWidths).toBeDefined();
       expect(result.columnWidths.length).toBe(template!.headers.length);
     });
@@ -195,9 +195,9 @@ describe('TemplateEngine', () => {
     it('should calculate row heights', () => {
       const template = engine.getTemplate(TemplateType.DAILY_SIMPLE);
       expect(template).toBeDefined();
-      
+
       const result = engine.render(template!, mockContext);
-      
+
       expect(result.rowHeights).toBeDefined();
       expect(result.rowHeights.length).toBeGreaterThan(0);
     });
@@ -207,9 +207,9 @@ describe('TemplateEngine', () => {
     it('should clone template with new id and name', () => {
       const template = engine.getTemplate(TemplateType.DAILY_SIMPLE);
       expect(template).toBeDefined();
-      
+
       const cloned = engine.cloneTemplate(template!, 'cloned-1', '克隆模板');
-      
+
       expect(cloned.id).toBe('cloned-1');
       expect(cloned.name).toBe('克隆模板');
       expect(cloned.type).toBe(template!.type);
@@ -219,10 +219,10 @@ describe('TemplateEngine', () => {
     it('should create independent copy', () => {
       const template = engine.getTemplate(TemplateType.DAILY_SIMPLE);
       expect(template).toBeDefined();
-      
+
       const cloned = engine.cloneTemplate(template!, 'cloned-2', '克隆模板2');
       cloned.headers[0].title = '修改后的标题';
-      
+
       expect(template!.headers[0].title).not.toBe('修改后的标题');
     });
   });

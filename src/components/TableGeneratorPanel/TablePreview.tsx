@@ -138,7 +138,7 @@ export const TablePreview: React.FC<TablePreviewProps> = ({
               key={index}
               className="flex items-center gap-1.5 px-2 py-1 bg-white border border-gray-200 rounded-md"
             >
-              <span className="text-sm font-medium text-gray-800">{column.name}</span>
+              <span className="text-sm font-medium text-gray-800">{column.title}</span>
               <span className={`px-1.5 py-0.5 text-xs rounded ${getColumnTypeColor(column.type)}`}>
                 {getColumnTypeLabel(column.type)}
               </span>
@@ -166,7 +166,7 @@ export const TablePreview: React.FC<TablePreviewProps> = ({
                     key={index}
                     className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                   >
-                    {column.name}
+                    {column.title}
                   </th>
                 ))}
               </tr>
@@ -177,7 +177,7 @@ export const TablePreview: React.FC<TablePreviewProps> = ({
                   <td className="px-3 py-2 text-gray-400 text-xs">{rowIndex + 1}</td>
                   {columns.map((column, colIndex) => (
                     <td key={colIndex} className="px-3 py-2 text-gray-700 whitespace-nowrap">
-                      {formatCellValue(row[column.name], column.type)}
+                      {formatCellValue(row[column.key], column.type)}
                     </td>
                   ))}
                 </tr>

@@ -20,7 +20,8 @@ import {
   ReadTableData,
   TableReadOptions,
   RangeDetectionResult,
-  CellStyleInfo,
+  AtomicOperation,
+  CellUpdate,
 } from '@/types';
 import { RenderResult } from '@/core/template';
 import { ChartConfig } from '@/core/generator';
@@ -239,7 +240,9 @@ export class ExcelAdapter {
       const startCol = this.getCellCol(startCell);
 
       // 1. 写入表头
-      const headers = tableData.columns.map(c => c.name);
+      console.log('[ExcelAdapter] 表格列信息:', tableData.columns.map(c => ({ key: c.key, title: c.title })));
+      const headers = tableData.columns.map(c => c.title);
+      console.log('[ExcelAdapter] 生成的表头:', headers);
       const headerRange = sheet.getRangeByIndexes(startRow - 1, startCol - 1, 1, headers.length);
       headerRange.values = [headers];
       headerRange.format.font.bold = true;
@@ -248,12 +251,17 @@ export class ExcelAdapter {
       if (tableData.rows.length > 0) {
         const data = tableData.rows.map(row =>
           tableData.columns.map(col => {
-            const value = row[col.name];
-            // 处理日期对象
-            if (col.type === 'date' || col.type === 'datetime') {
-              if (typeof value === 'string' && !isNaN(Date.parse(value))) {
-                return new Date(value).toISOString();
-              }
+            const value = row[col.key];
+            console.log(`[ExcelAdapter] 处理列 ${col.key} (${col.title}):`, value);
+            // 处理日期和时间值 - 保持原始格式供 Excel 解析
+            if (col.type === 'date') {
+              return this.formatDateForExcel(value);
+            }
+            if (col.type === 'time') {
+              return this.formatTimeForExcel(value);
+            }
+            if (col.type === 'datetime') {
+              return this.formatDateTimeForExcel(value);
             }
             return value;
           })
@@ -317,6 +325,11 @@ export class ExcelAdapter {
     tableData: StyledTableData,
     options: WriteTableOptions = {}
   ): Promise<void> {
+    console.log('[ExcelAdapter] 开始写入带样式表格...');
+    console.log('[ExcelAdapter] 表格数据列数:', tableData.columns.length);
+    console.log('[ExcelAdapter] 表格数据行数:', tableData.rows.length);
+    console.log('[ExcelAdapter] 表格名称:', tableData.tableName);
+
     await Excel.run(async (context: Excel.RequestContext) => {
       const sheetName = options.sheetName || this.config.defaultSheetName;
       let sheet: Excel.Worksheet;
@@ -341,7 +354,7 @@ export class ExcelAdapter {
       const styleConfig = tableData.style;
 
       // 1. 写入表头
-      const headers = tableData.columns.map(c => c.name);
+      const headers = tableData.columns.map(c => c.title);
       const headerRange = sheet.getRangeByIndexes(startRow - 1, startCol - 1, 1, headers.length);
       headerRange.values = [headers];
 
@@ -370,13 +383,39 @@ export class ExcelAdapter {
 
       // 2. 写入数据行
       if (tableData.rows.length > 0) {
-        const data = tableData.rows.map(row =>
+        const data = tableData.rows.map((row, rowIndex) =>
           tableData.columns.map(col => {
-            const value = row[col.name];
-            if (col.type === 'date' || col.type === 'datetime') {
-              if (typeof value === 'string' && !isNaN(Date.parse(value))) {
-                return new Date(value).toISOString();
-              }
+            const value = row[col.key];
+            // 处理日期和时间值 - 保持原始格式供 Excel 解析
+            if (col.type === 'date') {
+              const formatted = this.formatDateForExcel(value);
+              console.log(
+                `[ExcelAdapter] 日期格式化 [行${rowIndex}, 列${col.key} (${col.title})]:`,
+                value,
+                '->',
+                formatted
+              );
+              return formatted;
+            }
+            if (col.type === 'time') {
+              const formatted = this.formatTimeForExcel(value);
+              console.log(
+                `[ExcelAdapter] 时间格式化 [行${rowIndex}, 列${col.key} (${col.title})]:`,
+                value,
+                '->',
+                formatted
+              );
+              return formatted;
+            }
+            if (col.type === 'datetime') {
+              const formatted = this.formatDateTimeForExcel(value);
+              console.log(
+                `[ExcelAdapter] 日期时间格式化 [行${rowIndex}, 列${col.key} (${col.title})]:`,
+                value,
+                '->',
+                formatted
+              );
+              return formatted;
             }
             return value;
           })
@@ -496,6 +535,8 @@ export class ExcelAdapter {
         );
         await context.sync();
       }
+
+      console.log('[ExcelAdapter] 表格写入完成');
     });
   }
 
@@ -511,7 +552,7 @@ export class ExcelAdapter {
   ): Promise<void> {
     for (const rule of rules) {
       // 查找列索引
-      const colIndex = tableData.columns.findIndex(c => c.name === rule.columnName);
+      const colIndex = tableData.columns.findIndex(c => c.title === rule.columnName);
       if (colIndex === -1) continue;
 
       // 获取列的数据范围（不包括表头）
@@ -538,7 +579,7 @@ export class ExcelAdapter {
             rule.config as CellValueConfig,
             tableData.rows,
             colIndex,
-            tableData.columns[colIndex].name
+            tableData.columns[colIndex].title
           );
           break;
       }
@@ -694,12 +735,12 @@ export class ExcelAdapter {
     tableData.columns.forEach((col, colIndex) => {
       const isStatusColumn =
         col.type === 'text' &&
-        (col.name.includes('状态') || col.name.includes('结果') || col.name.includes('进度'));
+        (col.title.includes('状态') || col.title.includes('结果') || col.title.includes('进度'));
 
       if (isStatusColumn) {
         // 遍历每一行，根据值设置颜色
         tableData.rows.forEach((row, rowIndex) => {
-          const value = String(row[col.name] || '');
+          const value = String(row[col.key] || '');
           const colorConfig = STATUS_COLOR_MAP[value];
 
           if (colorConfig) {
@@ -970,15 +1011,90 @@ export class ExcelAdapter {
 
   /**
    * 映射图表类型
+   * 支持所有常用的 Excel 图表类型
+   * 注意：使用字符串值以兼容不同版本的 Office.js 类型定义
    */
   private mapChartType(type: string): Excel.ChartType {
-    const typeMap: Record<string, Excel.ChartType> = {
-      pie: Excel.ChartType.pie,
-      bar: Excel.ChartType.columnClustered,
-      line: Excel.ChartType.line,
-      doughnut: Excel.ChartType.doughnut,
+    // 标准化输入：转小写并去除空格
+    const normalizedType = type.toLowerCase().trim();
+    console.log(`[ExcelAdapter] mapChartType: "${type}" -> "${normalizedType}"`);
+
+    // 使用字符串映射，然后转换为 Excel.ChartType
+    // 这样可以避免 TypeScript 类型定义不完整的问题
+    const typeMap: Record<string, string> = {
+      // 柱状图（垂直）
+      column: 'ColumnClustered',
+      columnclustered: 'ColumnClustered',
+      columnstacked: 'ColumnStacked',
+      column100: 'ColumnStacked100',
+
+      // 条形图（水平）
+      bar: 'BarClustered',
+      barclustered: 'BarClustered',
+      barstacked: 'BarStacked',
+      bar100: 'BarStacked100',
+
+      // 折线图
+      line: 'Line',
+      linemarkers: 'LineMarkers',
+      linestacked: 'LineStacked',
+      linestackedmarkers: 'LineMarkersStacked',
+
+      // 饼图
+      pie: 'Pie',
+      pie3d: '3DPie',
+      pieexploded: 'PieExploded',
+
+      // 环形图
+      doughnut: 'Doughnut',
+      doughnutexploded: 'DoughnutExploded',
+
+      // 面积图
+      area: 'Area',
+      areastacked: 'AreaStacked',
+      areastacked100: 'AreaStacked100',
+
+      // 散点图
+      scatter: 'XYScatter',
+      xyscatter: 'XYScatter',
+      scatterlines: 'XYScatterLines',
+      scatterlinesnomarkers: 'XYScatterLinesNoMarkers',
+      scattersmooth: 'XYScatterSmooth',
+      scattersmoothnomarkers: 'XYScatterSmoothNoMarkers',
+
+      // 雷达图
+      radar: 'Radar',
+      radarmarkers: 'RadarMarkers',
+      radarfilled: 'RadarFilled',
+
+      // 组合图（使用柱状图作为基础）
+      combo: 'ColumnClustered',
+
+      // 3D 图表
+      column3d: '3DColumnClustered',
+      bar3d: '3DBarClustered',
+      line3d: '3DLine',
+      area3d: '3DArea',
+
+      // Excel 原生支持的图表类型
+      sunburst: 'Sunburst',
+      treemap: 'Treemap',
+      // heatmap 不是 Excel 原生支持的图表类型，回退到柱状图
+      heatmap: 'ColumnClustered',
     };
-    return typeMap[type] || Excel.ChartType.columnClustered;
+
+    // 获取映射的类型字符串
+    const chartTypeString = typeMap[normalizedType] || 'ColumnClustered';
+
+    // 记录替代方案
+    if (normalizedType === 'heatmap') {
+      console.log(
+        `[ExcelAdapter] 图表类型 "${type}" 不被 Excel 原生支持，使用替代方案: "${chartTypeString}"`
+      );
+    }
+
+    // 转换为 Excel.ChartType（使用类型断言）
+    return chartTypeString as Excel.ChartType;
   }
 
   /**
@@ -1045,6 +1161,8 @@ export class ExcelAdapter {
         return '0.00%';
       case 'date':
         return 'yyyy-mm-dd';
+      case 'time':
+        return 'hh:mm';
       case 'datetime':
         return 'yyyy-mm-dd hh:mm:ss';
       case 'number':
@@ -1052,6 +1170,128 @@ export class ExcelAdapter {
       default:
         return null;
     }
+  }
+
+  /**
+   * 格式化日期值供 Excel 使用
+   * 将各种日期格式转换为 Excel 可识别的格式
+   */
+  private formatDateForExcel(value: unknown): string | number {
+    if (value === null || value === undefined || value === '') {
+      return '';
+    }
+
+    // 如果已经是 YYYY-MM-DD 格式，直接返回
+    if (typeof value === 'string') {
+      const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+      if (datePattern.test(value)) {
+        return value;
+      }
+
+      // 处理 ISO 8601 格式 (2023-10-22T00:00:00.000Z)
+      const isoPattern = /^\d{4}-\d{2}-\d{2}T/;
+      if (isoPattern.test(value)) {
+        return value.split('T')[0];
+      }
+
+      // 尝试解析其他日期格式
+      const date = new Date(value);
+      if (!isNaN(date.getTime())) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+    }
+
+    // 如果是数字（Excel 日期序列号），直接返回
+    if (typeof value === 'number') {
+      return value;
+    }
+
+    return String(value);
+  }
+
+  /**
+   * 格式化时间值供 Excel 使用
+   * 将各种时间格式转换为 Excel 可识别的 HH:MM 格式
+   */
+  private formatTimeForExcel(value: unknown): string | number {
+    if (value === null || value === undefined || value === '') {
+      return '';
+    }
+
+    if (typeof value === 'string') {
+      // 如果已经是 HH:MM 格式，直接返回
+      const timePattern = /^\d{2}:\d{2}$/;
+      if (timePattern.test(value)) {
+        return value;
+      }
+
+      // 处理 HH:MM:SS 格式
+      const timeWithSecondsPattern = /^(\d{2}):(\d{2}):\d{2}$/;
+      const match = value.match(timeWithSecondsPattern);
+      if (match) {
+        return `${match[1]}:${match[2]}`;
+      }
+
+      // 处理 ISO 日期时间格式，提取时间部分
+      const isoPattern = /^\d{4}-\d{2}-\d{2}T(\d{2}):(\d{2})/;
+      const isoMatch = value.match(isoPattern);
+      if (isoMatch) {
+        return `${isoMatch[1]}:${isoMatch[2]}`;
+      }
+    }
+
+    // 如果是数字（Excel 时间序列号），直接返回
+    if (typeof value === 'number') {
+      return value;
+    }
+
+    return String(value);
+  }
+
+  /**
+   * 格式化日期时间值供 Excel 使用
+   * 将各种日期时间格式转换为 Excel 可识别的格式
+   */
+  private formatDateTimeForExcel(value: unknown): string | number {
+    if (value === null || value === undefined || value === '') {
+      return '';
+    }
+
+    if (typeof value === 'string') {
+      // 如果已经是 YYYY-MM-DD HH:MM:SS 格式，直接返回
+      const datetimePattern = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/;
+      if (datetimePattern.test(value)) {
+        return value;
+      }
+
+      // 处理 ISO 8601 格式
+      const isoPattern = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/;
+      const match = value.match(isoPattern);
+      if (match) {
+        return `${match[1]} ${match[2]}:${match[3]}`;
+      }
+
+      // 尝试解析其他日期时间格式
+      const date = new Date(value);
+      if (!isNaN(date.getTime())) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day} ${hours}:${minutes}`;
+      }
+    }
+
+    // 如果是数字（Excel 日期时间序列号），直接返回
+    if (typeof value === 'number') {
+      return value;
+    }
+
+    return String(value);
   }
 
   // ============================================
@@ -1094,36 +1334,38 @@ export class ExcelAdapter {
       // 2. 检查选区是否在表格内
       try {
         const tables = sheet.tables;
-        // @ts-ignore
-        tables.load('items');
+        tables.load('items/name');
         await context.sync();
 
-        for (const table of tables.items) {
-          // @ts-ignore - getRange 在 Excel API 中可用
-          const tableRange = table.getRange();
-          tableRange.load('address');
-          await context.sync();
+        if (tables.items && tables.items.length > 0) {
+          for (const table of tables.items) {
+            // @ts-ignore - getRange 在 Excel API 中可用
+            const tableRange = table.getRange();
+            tableRange.load('address');
+            await context.sync();
 
-          // 检查选区是否与表格相交
-          // @ts-ignore
-          const intersection = selection.getIntersectionOrNullObject(tableRange);
-          intersection.load('isNullObject');
-          await context.sync();
+            // 检查选区是否与表格相交
+            // @ts-ignore
+            const intersection = selection.getIntersectionOrNullObject(tableRange);
+            intersection.load('isNullObject');
+            await context.sync();
 
-          // @ts-ignore
-          if (!intersection.isNullObject) {
-            result = {
-              detected: true,
-              address: tableRange.address,
-              isTable: true,
-              tableName: table.name,
-              method: 'table',
-            };
-            return;
+            // @ts-ignore
+            if (!intersection.isNullObject) {
+              result = {
+                detected: true,
+                address: tableRange.address,
+                isTable: true,
+                tableName: table.name,
+                method: 'table',
+              };
+              return;
+            }
           }
         }
       } catch (e) {
         // 没有表格或其他错误，继续
+        console.log('[ExcelAdapter] detectTableRange 表格检测跳过:', e);
       }
 
       // 3. 使用已使用范围作为后备
@@ -1174,6 +1416,7 @@ export class ExcelAdapter {
 
   /**
    * 读取表格数据（支持选区、表格对象或指定范围）
+   * 增强版本：确保获取完整的表格上下文数据
    */
   async readTableData(
     rangeAddress?: string,
@@ -1214,9 +1457,17 @@ export class ExcelAdapter {
         targetRange.load('format/fill/color, format/font/color, format/font/bold');
       }
 
+      // 可选：加载公式
+      if (options.includeFormulas) {
+        // @ts-ignore
+        targetRange.load('formulas');
+      }
+
       await context.sync();
 
       const values = targetRange.values;
+      const formulas = options.includeFormulas ? targetRange.formulas : null;
+
       if (!values || values.length === 0) {
         return;
       }
@@ -1224,10 +1475,12 @@ export class ExcelAdapter {
       // 限制最大行数
       const maxRows = options.maxRows || 1000;
       const limitedValues = values.slice(0, maxRows + 1); // +1 for header
+      const limitedFormulas = formulas ? formulas.slice(0, maxRows + 1) : null;
 
       // 第一行作为表头
       const headers = limitedValues[0] as unknown[];
       const dataRows = limitedValues.slice(1);
+      const dataFormulas = limitedFormulas ? limitedFormulas.slice(1) : null;
 
       // 推断列类型
       const columns = headers.map((header, index) => ({
@@ -1237,9 +1490,17 @@ export class ExcelAdapter {
       }));
 
       // 转换数据行
-      const rows = dataRows.map(row =>
+      const rows = dataRows.map((row, rowIndex) =>
         columns.reduce(
           (obj, col) => {
+            // 如果有公式且公式不为空，则优先使用公式
+            if (dataFormulas && dataFormulas[rowIndex] && dataFormulas[rowIndex][col.index]) {
+              const formula = dataFormulas[rowIndex][col.index];
+              if (typeof formula === 'string' && formula.startsWith('=')) {
+                obj[col.name] = formula; // 保留公式
+                return obj;
+              }
+            }
             obj[col.name] = row[col.index];
             return obj;
           },
@@ -1265,28 +1526,30 @@ export class ExcelAdapter {
       // 检查是否是表格对象
       try {
         const tables = sheet.tables;
-        // @ts-ignore
-        tables.load('items');
+        tables.load('items/name,items/style');
         await context.sync();
 
-        for (const table of tables.items) {
-          // @ts-ignore - getRange 在 Excel API 中可用
-          const tableRange = table.getRange();
-          tableRange.load('address');
-          await context.sync();
+        if (tables.items && tables.items.length > 0) {
+          for (const table of tables.items) {
+            // @ts-ignore - getRange 在 Excel API 中可用
+            const tableRange = table.getRange();
+            tableRange.load('address');
+            await context.sync();
 
-          if (tableRange.address === targetRange.address) {
-            result.tableName = table.name;
-            // @ts-ignore
-            if (table.style) {
+            if (tableRange.address === targetRange.address) {
+              result.tableName = table.name;
               // @ts-ignore
-              result.tableStyleName = table.style;
+              if (table.style) {
+                // @ts-ignore
+                result.tableStyleName = table.style;
+              }
+              break;
             }
-            break;
           }
         }
       } catch (e) {
         // 忽略表格检测错误
+        console.log('[ExcelAdapter] readTableData 表格检测跳过:', e);
       }
     });
 
@@ -1344,7 +1607,8 @@ export class ExcelAdapter {
   }
 
   /**
-   * 更新表格数据（用于撤销/重做）
+   * 更新表格数据（保留样式版本）
+   * 只更新单元格的值，不清除格式
    */
   async updateTableData(address: string, data: StyledTableData, sheetName?: string): Promise<void> {
     await Excel.run(async (context: Excel.RequestContext) => {
@@ -1352,18 +1616,51 @@ export class ExcelAdapter {
         ? context.workbook.worksheets.getItem(sheetName)
         : context.workbook.worksheets.getActiveWorksheet();
 
-      // 清除原有范围
+      // 解析起始位置
+      const startCell = address.split(':')[0];
+      const startRow = this.getCellRow(startCell);
+      const startCol = this.getCellCol(startCell);
+
+      // 构建数据矩阵
+      const headers = data.columns.map(c => c.title);
+      const dataValues = data.rows.map(row =>
+        data.columns.map(col => {
+          const value = row[col.key];
+          if (value === undefined || value === null) return '';
+          return value;
+        })
+      );
+
+      // 合并表头和数据
+      const allValues = [headers, ...dataValues];
+
+      // 获取目标范围并只更新值（保留格式）
+      const targetRange = sheet.getRangeByIndexes(
+        startRow - 1,
+        startCol - 1,
+        allValues.length,
+        headers.length
+      );
+
+      // 只更新值，不清除格式
+      targetRange.values = allValues as (string | number | boolean)[][];
+
+      await context.sync();
+    });
+  }
+
+  /**
+   * 清除指定范围（用于撤销创建操作）
+   */
+  async clearRange(address: string, sheetName?: string): Promise<void> {
+    await Excel.run(async (context: Excel.RequestContext) => {
+      const sheet = sheetName
+        ? context.workbook.worksheets.getItem(sheetName)
+        : context.workbook.worksheets.getActiveWorksheet();
+
       const targetRange = sheet.getRange(address);
       targetRange.clear();
       await context.sync();
-
-      // 写入新数据
-      await this.writeStyledTable(data, {
-        sheetName: sheetName || undefined,
-        startCell: address.split(':')[0], // 取起始单元格
-        createTable: !!data.tableName,
-        tableName: data.tableName,
-      });
     });
   }
 
@@ -1397,20 +1694,21 @@ export class ExcelAdapter {
         : context.workbook.worksheets.getActiveWorksheet();
 
       const sheetTables = sheet.tables;
-      // @ts-ignore
-      sheetTables.load('items');
+      sheetTables.load('items/name');
       await context.sync();
 
-      for (const table of sheetTables.items) {
-        // @ts-ignore - getRange 在 Excel API 中可用
-        const range = table.getRange();
-        range.load('address');
-        await context.sync();
+      if (sheetTables.items && sheetTables.items.length > 0) {
+        for (const table of sheetTables.items) {
+          // @ts-ignore - getRange 在 Excel API 中可用
+          const range = table.getRange();
+          range.load('address');
+          await context.sync();
 
-        tables.push({
-          name: table.name,
-          address: range.address,
-        });
+          tables.push({
+            name: table.name,
+            address: range.address,
+          });
+        }
       }
     });
 
@@ -1436,6 +1734,12 @@ export class ExcelAdapter {
       showDataLabels?: boolean;
     } = {}
   ): Promise<string> {
+    console.log('[ExcelAdapter] createChartV2 调用参数:', {
+      dataRange,
+      chartType,
+      options,
+    });
+
     let chartName = '';
 
     await Excel.run(async (context: Excel.RequestContext) => {
@@ -1448,47 +1752,72 @@ export class ExcelAdapter {
 
       const chart = sheet.charts.add(excelChartType, range, Excel.ChartSeriesBy.auto);
 
+      // 使用 try-catch 包裹属性设置，防止因某些图表类型不支持特定属性而导致整个创建过程失败
+
       // 设置标题
-      if (options.title) {
-        chart.title.text = options.title;
-        chart.title.visible = true;
+      try {
+        if (options.title) {
+          chart.title.text = options.title;
+          chart.title.visible = true;
+        }
+      } catch (e) {
+        console.warn('[ExcelAdapter] 设置图表标题失败:', e);
       }
 
       // 设置位置
-      if (options.position) {
-        chart.left = options.position.left;
-        chart.top = options.position.top;
-        chart.width = options.position.width;
-        chart.height = options.position.height;
-      } else {
-        // 默认位置：表格右侧
-        chart.left = 400;
-        chart.top = 10;
-        chart.width = 450;
-        chart.height = 300;
+      try {
+        if (options.position) {
+          chart.left = options.position.left;
+          chart.top = options.position.top;
+          chart.width = options.position.width;
+          chart.height = options.position.height;
+        } else {
+          // 默认位置：表格右侧
+          chart.left = 400;
+          chart.top = 10;
+          chart.width = 450;
+          chart.height = 300;
+        }
+      } catch (e) {
+        console.warn('[ExcelAdapter] 设置图表位置失败:', e);
       }
 
       // 设置图例
-      if (options.showLegend !== false) {
-        chart.legend.visible = true;
-        if (options.legendPosition) {
-          chart.legend.position = this.mapLegendPosition(options.legendPosition);
+      try {
+        if (options.showLegend !== false) {
+          chart.legend.visible = true;
+          if (options.legendPosition) {
+            chart.legend.position = this.mapLegendPosition(options.legendPosition);
+          }
+        } else {
+          chart.legend.visible = false;
         }
-      } else {
-        chart.legend.visible = false;
+      } catch (e) {
+        console.warn('[ExcelAdapter] 设置图表图例失败:', e);
       }
 
       // 设置数据标签
-      // @ts-ignore - dataLabels 在较新 API 中可用
-      if (options.showDataLabels && chart.series) {
-        // @ts-ignore
-        chart.series.items.forEach(series => {
+      try {
+        // @ts-ignore - dataLabels 在较新 API 中可用
+        if (options.showDataLabels) {
+          // 先加载 series.items
+          chart.series.load('items');
+          await context.sync();
+
           // @ts-ignore
-          if (series.dataLabels) {
+          if (chart.series.items) {
             // @ts-ignore
-            series.dataLabels.showValue = true;
+            chart.series.items.forEach(series => {
+              // @ts-ignore
+              if (series.dataLabels) {
+                // @ts-ignore
+                series.dataLabels.showValue = true;
+              }
+            });
           }
-        });
+        }
+      } catch (e) {
+        console.warn('[ExcelAdapter] 设置图表数据标签失败:', e);
       }
 
       chart.load('name');
@@ -1511,16 +1840,17 @@ export class ExcelAdapter {
         : context.workbook.worksheets.getActiveWorksheet();
 
       const sheetCharts = sheet.charts;
-      // @ts-ignore
-      sheetCharts.load('items');
+      sheetCharts.load('items/name,items/chartType');
       await context.sync();
 
-      for (const chart of sheetCharts.items) {
-        charts.push({
-          name: chart.name,
-          // @ts-ignore - chartType 在 Excel API 中可用
-          type: String(chart.chartType || 'unknown'),
-        });
+      if (sheetCharts.items && sheetCharts.items.length > 0) {
+        for (const chart of sheetCharts.items) {
+          charts.push({
+            name: chart.name,
+            // @ts-ignore - chartType 在 Excel API 中可用
+            type: String(chart.chartType || 'unknown'),
+          });
+        }
       }
     });
 
@@ -1676,6 +2006,349 @@ export class ExcelAdapter {
       default:
         return { startCell: 'A1' };
     }
+  }
+  // ============================================
+  // V3 新增功能：原子操作（精细化修改）
+  // ============================================
+
+  /**
+   * 执行原子操作（精细化表格修改）
+   * 只更新指定的单元格，保留其他单元格的数据和样式
+   * @param operations 原子操作列表
+   * @param baseAddress 基础地址（如 "A1"），用于相对定位
+   * @param sheetName 工作表名称
+   */
+  async executeAtomicOperations(
+    operations: AtomicOperation[],
+    baseAddress?: string,
+    sheetName?: string
+  ): Promise<{ success: boolean; appliedCount: number; errors: string[] }> {
+    const errors: string[] = [];
+    let appliedCount = 0;
+
+    await Excel.run(async (context: Excel.RequestContext) => {
+      const sheet = sheetName
+        ? context.workbook.worksheets.getItem(sheetName)
+        : context.workbook.worksheets.getActiveWorksheet();
+
+      // 解析基础地址
+      let baseRow = 1;
+      let baseCol = 1;
+      if (baseAddress) {
+        baseRow = this.getCellRow(baseAddress);
+        baseCol = this.getCellCol(baseAddress);
+      }
+
+      for (const operation of operations) {
+        try {
+          switch (operation.type) {
+            case 'updateCell':
+              await this.executeUpdateCell(sheet, operation, baseRow, baseCol);
+              break;
+
+            case 'updateRange':
+              await this.executeUpdateRange(sheet, operation);
+              break;
+
+            case 'batchUpdate':
+              await this.executeBatchUpdate(sheet, operation, baseRow, baseCol);
+              break;
+
+            case 'insertRow':
+              await this.executeInsertRow(sheet, operation, baseRow, baseCol);
+              break;
+
+            case 'deleteRow':
+              await this.executeDeleteRow(sheet, operation, baseRow, baseCol);
+              break;
+
+            case 'insertColumn':
+              await this.executeInsertColumn(sheet, operation, baseRow, baseCol);
+              break;
+
+            case 'deleteColumn':
+              await this.executeDeleteColumn(sheet, operation, baseRow, baseCol);
+              break;
+
+            case 'setFormula':
+              await this.executeSetFormula(sheet, operation, baseRow, baseCol);
+              break;
+
+            case 'batchFormula':
+              await this.executeBatchFormula(sheet, operation, baseRow, baseCol);
+              break;
+
+            case 'sortRange':
+              await this.executeSortRange(sheet, operation);
+              break;
+
+            default:
+              console.warn(`[ExcelAdapter] 未知的操作类型: ${operation.type}`);
+          }
+          appliedCount++;
+        } catch (error) {
+          const errorMsg = `操作 ${operation.type} 失败: ${error instanceof Error ? error.message : String(error)}`;
+          errors.push(errorMsg);
+          console.error(`[ExcelAdapter] ${errorMsg}`);
+        }
+      }
+
+      await context.sync();
+    });
+
+    return {
+      success: errors.length === 0,
+      appliedCount,
+      errors,
+    };
+  }
+
+  /**
+   * 执行单元格更新
+   */
+  private async executeUpdateCell(
+    sheet: Excel.Worksheet,
+    operation: AtomicOperation,
+    baseRow: number,
+    baseCol: number
+  ): Promise<void> {
+    const { target, params } = operation;
+
+    let range: Excel.Range;
+    if (target.includes(',')) {
+      // 相对坐标格式: "row,col"
+      const [row, col] = target.split(',').map(Number);
+      range = sheet.getRangeByIndexes(baseRow - 1 + row, baseCol - 1 + col, 1, 1);
+    } else {
+      // 绝对地址格式: "B3"
+      range = sheet.getRange(target);
+    }
+
+    if (params.value !== undefined) {
+      range.values = [[params.value]];
+    }
+  }
+
+  /**
+   * 执行范围更新
+   */
+  private async executeUpdateRange(
+    sheet: Excel.Worksheet,
+    operation: AtomicOperation
+  ): Promise<void> {
+    const { target, params } = operation;
+    const range = sheet.getRange(target);
+
+    if (params.values) {
+      range.values = params.values as (string | number | boolean)[][];
+    }
+  }
+
+  /**
+   * 执行批量单元格更新
+   */
+  private async executeBatchUpdate(
+    sheet: Excel.Worksheet,
+    operation: AtomicOperation,
+    _baseRow: number,
+    _baseCol: number
+  ): Promise<void> {
+    const { params } = operation;
+
+    if (!params.cells || !Array.isArray(params.cells)) {
+      throw new Error('batchUpdate 需要 cells 参数');
+    }
+
+    for (const cell of params.cells as CellUpdate[]) {
+      const { address, value } = cell;
+
+      // 解析地址
+      const cellRow = this.getCellRow(address);
+      const cellCol = this.getCellCol(address);
+
+      // 使用绝对地址
+      const range = sheet.getRangeByIndexes(cellRow - 1, cellCol - 1, 1, 1);
+      range.values = [[value]];
+    }
+  }
+
+  /**
+   * 执行插入行
+   */
+  private async executeInsertRow(
+    sheet: Excel.Worksheet,
+    operation: AtomicOperation,
+    baseRow: number,
+    _baseCol: number
+  ): Promise<void> {
+    const { params } = operation;
+    const position = typeof params.position === 'number' ? params.position : 0;
+    const count = params.count ?? 1;
+
+    // 获取要插入位置的行
+    const insertRow = baseRow + position;
+    const range = sheet.getRangeByIndexes(insertRow - 1, 0, count, 1);
+    const entireRow = range.getEntireRow();
+    // @ts-ignore - insert 方法在 Excel API 中可用
+    entireRow.insert('Down');
+  }
+
+  /**
+   * 执行删除行
+   */
+  private async executeDeleteRow(
+    sheet: Excel.Worksheet,
+    operation: AtomicOperation,
+    baseRow: number,
+    _baseCol: number
+  ): Promise<void> {
+    const { params } = operation;
+    const position = typeof params.position === 'number' ? params.position : 0;
+    const count = params.count ?? 1;
+
+    const deleteRow = baseRow + position;
+    const range = sheet.getRangeByIndexes(deleteRow - 1, 0, count, 1);
+    const entireRow = range.getEntireRow();
+    // @ts-ignore - delete 方法在 Excel API 中可用
+    entireRow.delete('Up');
+  }
+
+  /**
+   * 执行插入列
+   */
+  private async executeInsertColumn(
+    sheet: Excel.Worksheet,
+    operation: AtomicOperation,
+    _baseRow: number,
+    baseCol: number
+  ): Promise<void> {
+    const { params } = operation;
+    const position = typeof params.position === 'number' ? params.position : 0;
+    const count = params.count ?? 1;
+
+    const insertCol = baseCol + position;
+    const range = sheet.getRangeByIndexes(0, insertCol - 1, 1, count);
+    const entireCol = range.getEntireColumn();
+    // @ts-ignore - insert 方法在 Excel API 中可用
+    entireCol.insert('Right');
+  }
+
+  /**
+   * 执行删除列
+   */
+  private async executeDeleteColumn(
+    sheet: Excel.Worksheet,
+    operation: AtomicOperation,
+    _baseRow: number,
+    baseCol: number
+  ): Promise<void> {
+    const { params } = operation;
+    const position = typeof params.position === 'number' ? params.position : 0;
+    const count = params.count ?? 1;
+
+    const deleteCol = baseCol + position;
+    const range = sheet.getRangeByIndexes(0, deleteCol - 1, 1, count);
+    const entireCol = range.getEntireColumn();
+    // @ts-ignore - delete 方法在 Excel API 中可用
+    entireCol.delete('Left');
+  }
+
+  /**
+   * 执行设置公式
+   */
+  private async executeSetFormula(
+    sheet: Excel.Worksheet,
+    operation: AtomicOperation,
+    baseRow: number,
+    baseCol: number
+  ): Promise<void> {
+    const { target, params } = operation;
+
+    let range: Excel.Range;
+    if (target.includes(',')) {
+      const [row, col] = target.split(',').map(Number);
+      range = sheet.getRangeByIndexes(baseRow - 1 + row, baseCol - 1 + col, 1, 1);
+    } else {
+      range = sheet.getRange(target);
+    }
+
+    if (params.formula) {
+      range.formulas = [[params.formula]];
+    }
+  }
+
+  /**
+   * 执行批量设置公式
+   */
+  private async executeBatchFormula(
+    sheet: Excel.Worksheet,
+    operation: AtomicOperation,
+    _baseRow: number,
+    _baseCol: number
+  ): Promise<void> {
+    const { params } = operation;
+
+    if (!params.formulas || !Array.isArray(params.formulas)) {
+      throw new Error('batchFormula 需要 formulas 参数');
+    }
+
+    for (const formula of params.formulas as { address: string; formula: string }[]) {
+      const { address, formula: formulaStr } = formula;
+
+      // 解析地址
+      const cellRow = this.getCellRow(address);
+      const cellCol = this.getCellCol(address);
+
+      // 使用绝对地址
+      const range = sheet.getRangeByIndexes(cellRow - 1, cellCol - 1, 1, 1);
+      range.formulas = [[formulaStr]];
+    }
+  }
+
+  /**
+   * 执行排序
+   */
+  private async executeSortRange(
+    sheet: Excel.Worksheet,
+    operation: AtomicOperation
+  ): Promise<void> {
+    const { target, params } = operation;
+    const range = sheet.getRange(target);
+
+    const ascending = params.sortOrder !== 'desc';
+    const sortColumn = typeof params.sortColumn === 'number' ? params.sortColumn : 0;
+
+    // @ts-ignore - sort.apply 在 Excel API 中可用
+    range.sort.apply([
+      {
+        key: sortColumn,
+        // @ts-ignore
+        sortOn: 'Values',
+        ascending: ascending,
+      },
+    ]);
+  }
+
+  /**
+   * 更新单个单元格（便捷方法）
+   */
+  async updateCell(address: string, value: unknown, sheetName?: string): Promise<void> {
+    await this.executeAtomicOperations(
+      [{ type: 'updateCell', target: address, params: { value } }],
+      undefined,
+      sheetName
+    );
+  }
+
+  /**
+   * 批量更新单元格（便捷方法）
+   */
+  async updateCells(cells: CellUpdate[], sheetName?: string): Promise<void> {
+    await this.executeAtomicOperations(
+      [{ type: 'batchUpdate', target: '', params: { cells } }],
+      undefined,
+      sheetName
+    );
   }
 }
 

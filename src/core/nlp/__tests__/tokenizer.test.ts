@@ -38,7 +38,7 @@ describe('Tokenizer', () => {
       const result = tokenizer.tokenize('生成考勤表');
       const verbToken = result.find(t => t.word === '生成');
       const nounToken = result.find(t => t.word === '考勤表');
-      
+
       expect(verbToken?.pos).toBe(POS.VERB);
       expect(nounToken?.pos).toBe(POS.NOUN);
     });

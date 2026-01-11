@@ -1,6 +1,10 @@
 /**
  * 全局样式
+ * 现代艺术风格界面样式
  */
+
+/* 引入现代艺术风格样式 */
+@import './modern-artistic.css';
 
 /* Tailwind CSS 基础 */
 @import 'tailwindcss';
@@ -153,6 +157,10 @@
     animation: slideUp 0.3s ease-out;
   }
 
+  .animate-slide-in-right {
+    animation: slideInRight 0.25s ease-out;
+  }
+
   @keyframes fadeIn {
     from {
       opacity: 0;
@@ -170,6 +178,15 @@
     to {
       transform: translateY(0);
       opacity: 1;
+    }
+  }
+
+  @keyframes slideInRight {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
     }
   }
 }

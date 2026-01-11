@@ -33,6 +33,9 @@ const intentDescriptions: Record<AttendanceIntent, string> = {
   [AttendanceIntent.MODIFY_TEMPLATE]: '修改模板',
   [AttendanceIntent.QUERY_ATTENDANCE]: '查询考勤',
   [AttendanceIntent.EXPORT_REPORT]: '导出报表',
+  [AttendanceIntent.CREATE_GENERIC_TABLE]: '创建表格',
+  [AttendanceIntent.MODIFY_TABLE]: '修改表格',
+  [AttendanceIntent.MODIFY_CHART]: '修改图表',
   [AttendanceIntent.UNKNOWN]: '未知意图',
 };
 

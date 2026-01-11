@@ -10,7 +10,7 @@ import {
   Employee,
   DateRange,
 } from '@/types';
-import { ChartType } from '@/types';
+import { NlpChartType as ChartType } from '@/types';
 
 /**
  * 图表数据点

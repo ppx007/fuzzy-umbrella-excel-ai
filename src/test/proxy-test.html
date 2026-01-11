@@ -1,0 +1,61 @@
+<!--
+ * @Author: ppx007 duxiaojie3@gmail.com
+ * @LastEditTime: 2026-01-11 08:49:13
+ * @LastEditors: px007
+ * @ FilePath: Do not edit
+ * sa~ka~na~
+-->
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Proxy Test</title>
+</head>
+
+<body>
+    <h1>API Proxy Test</h1>
+    <button onclick="testProxy()">Test Proxy Connection</button>
+    <div id="results"></div>
+
+    <script>
+        async function testProxy() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<p>Testing proxy connection...</p>';
+
+            try {
+                // Test 1: Check if proxy is responding
+                console.log('Testing proxy connection...');
+                const response = await fetch('/api/models', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer test-key'
+                    }
+                });
+
+                console.log('Proxy response status:', response.status, response.statusText);
+                results.innerHTML += `<p>Proxy Status: ${response.status} ${response.statusText}</p>`;
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Proxy response data:', data);
+                    results.innerHTML += `<p style="color: green;">✅ Proxy is working!</p>`;
+                    results.innerHTML += `<p>Response: ${JSON.stringify(data, null, 2)}</p>`;
+                } else {
+                    const errorText = await response.text();
+                    console.error('Proxy error response:', errorText);
+                    results.innerHTML += `<p style="color: red;">❌ Proxy error: ${errorText}</p>`;
+                }
+
+            } catch (error) {
+                console.error('Proxy test failed:', error);
+                results.innerHTML += `<p style="color: red;">❌ Proxy test failed: ${error.message}</p>`;
+            }
+        }
+
+        // Auto-test on load
+        window.addEventListener('load', testProxy);
+    </script>
+</body>
+
+</html>

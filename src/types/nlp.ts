@@ -21,6 +21,9 @@ export enum AttendanceIntent {
   MODIFY_TEMPLATE = 'MODIFY_TEMPLATE',
   QUERY_ATTENDANCE = 'QUERY_ATTENDANCE',
   EXPORT_REPORT = 'EXPORT_REPORT',
+  CREATE_GENERIC_TABLE = 'CREATE_GENERIC_TABLE',
+  MODIFY_TABLE = 'MODIFY_TABLE',
+  MODIFY_CHART = 'MODIFY_CHART',
   UNKNOWN = 'UNKNOWN',
 }
 
@@ -37,6 +40,7 @@ export enum EntityType {
   CHART_TYPE = 'CHART_TYPE',
   STATISTIC_LIST = 'STATISTIC_LIST',
   COLUMN_LIST = 'COLUMN_LIST',
+  COLUMN_NAMES = 'COLUMN_NAMES',
   TIME = 'TIME',
   NUMBER = 'NUMBER',
 }
@@ -74,6 +78,7 @@ export interface ExtractedEntities {
   chartType?: ChartType;
   statistics?: StatisticType[];
   columns?: ColumnType[];
+  columnNames?: string[];
   outputFormat?: 'excel' | 'word';
   templateType?: TemplateType;
 }
@@ -100,16 +105,16 @@ export interface NLPResult {
   rawInput: string;
   originalInput?: string;
   normalizedInput?: string;
-  
+
   // 识别的意图
   intent: AttendanceIntent;
-  
+
   // 意图置信度
   confidence: number;
-  
+
   // 提取的实体
   entities: ExtractedEntities;
-  
+
   // 处理后的参数
   parameters: {
     dateRange?: DateRange;
@@ -119,16 +124,16 @@ export interface NLPResult {
     templateType?: string;
     [key: string]: unknown;
   };
-  
+
   // 处理建议
   suggestions?: string[];
-  
+
   // 是否需要更多信息
   needsMoreInfo?: boolean;
-  
+
   // 缺失的必要信息
   missingInfo?: string[];
-  
+
   // 匹配的规则ID
   matchedRuleId?: string;
 }
@@ -165,28 +170,28 @@ export interface EntityRule {
 export interface ProcessingContext {
   // 当前日期
   currentDate?: Date;
-  
+
   // 可用员工列表
   availableEmployees?: string[];
-  
+
   // 可用部门列表
   availableDepartments?: string[];
-  
+
   // 历史查询
   queryHistory?: NLPResult[];
-  
+
   // 上次日期范围（用于上下文推断）
   lastDateRange?: DateRange;
-  
+
   // 上次员工列表（用于上下文推断）
   lastEmployees?: string[];
-  
+
   // 上次部门（用于上下文推断）
   lastDepartment?: string;
-  
+
   // 上次意图
   lastIntent?: AttendanceIntent;
-  
+
   // 用户偏好
   userPreferences?: {
     defaultDateRange?: 'day' | 'week' | 'month';
@@ -215,10 +220,10 @@ export interface Token {
 export interface TokenizerConfig {
   // 是否进行词性标注
   enablePOS?: boolean;
-  
+
   // 自定义词典
   customDictionary?: Map<string, string>;
-  
+
   // 停用词列表
   stopWords?: string[];
 }

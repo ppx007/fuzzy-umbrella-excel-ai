@@ -81,13 +81,18 @@ export function useConversation() {
     (
       role: MessageRole,
       content: string,
-      tableOperation?: {
-        type: OperationType;
-        tableAddress?: string;
-        success: boolean;
-      },
-      isStreaming: boolean = false
+      options: {
+        tableOperation?: {
+          type: OperationType;
+          tableAddress?: string;
+          success: boolean;
+        };
+        isStreaming?: boolean;
+        isError?: boolean;
+        originalPrompt?: string;
+      } = {}
     ): ConversationMessage | null => {
+      const { tableOperation, isStreaming, isError, originalPrompt } = options;
       const message: ConversationMessage = {
         id: generateId(),
         role,
@@ -95,6 +100,8 @@ export function useConversation() {
         timestamp: Date.now(),
         tableOperation,
         isStreaming,
+        isError,
+        originalPrompt,
       };
 
       setState(prev => {
@@ -239,15 +246,15 @@ export function useConversation() {
   );
 
   /**
-   * 删除最后一条消息（用于重试）
+   * 删除指定ID的消息
    */
-  const removeLastMessage = useCallback(() => {
+  const removeMessage = useCallback((messageId: string) => {
     setState(prev => {
-      if (!prev.currentConversation || prev.currentConversation.messages.length === 0) {
+      if (!prev.currentConversation) {
         return prev;
       }
 
-      const updatedMessages = prev.currentConversation.messages.slice(0, -1);
+      const updatedMessages = prev.currentConversation.messages.filter(msg => msg.id !== messageId);
 
       return {
         ...prev,
@@ -374,7 +381,7 @@ export function useConversation() {
     // 消息管理
     addMessage,
     updateStreamingMessage,
-    removeLastMessage,
+    removeMessage,
     getMessagesForAI,
 
     // 表格关联

@@ -1,6 +1,6 @@
 /*
  * @Author: error: error: git config user.name & please set dead value or install git && error: git config user.email & please set dead value or install git & please set dead value or install git
- * @LastEditTime: 2026-01-03 11:20:00
+ * @LastEditTime: 2026-01-06 16:46:40
  * @LastEditors: px007
  * @ FilePath: Do not edit
  * sa~ka~na~
@@ -34,3 +34,22 @@ export {
   chartGenerationService,
   generateChart,
 } from './chart-generation-service';
+
+// 模型服务
+export { ModelService, modelService, DEFAULT_MODELS } from './model-service';
+export type { ModelInfo, ModelOption, CachedModels } from './model-service';
+
+// 文件解析服务
+export { fileParserService } from './file-parser-service';
+export type { ParsedFileData, UploadedFile } from './file-parser-service';
+
+// API预设管理服务
+export { apiPresetService } from './api-preset-service';
+export type {
+  ApiPreset,
+  ApiProvider,
+  CreateApiPresetRequest,
+  UpdateApiPresetRequest,
+  ApiPresetResponse,
+  ApiPresetListResponse,
+} from '@/types/api-preset';

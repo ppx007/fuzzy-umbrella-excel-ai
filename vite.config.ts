@@ -1,6 +1,6 @@
 /*
  * @Author: error: error: git config user.name & please set dead value or install git && error: git config user.email & please set dead value or install git & please set dead value or install git
- * @LastEditTime: 2026-01-03 01:46:58
+ * @LastEditTime: 2026-01-03 16:57:39
  * @LastEditors: px007
  * @ FilePath: Do not edit
  * sa~ka~na~
@@ -74,6 +74,19 @@ export default defineConfig(({ mode }) => {
           target: 'https://cat.beijixingxing.com', // 目标API服务器
           changeOrigin: true, // 必须设置为true
           rewrite: path => path.replace(/^\/api/, ''), // 重写请求路径，去掉/api前缀
+          timeout: 180000, // 3分钟超时（AI 生成可能需要较长时间）
+          proxyTimeout: 180000,
+          configure: (proxy, _options) => {
+            proxy.on('error', (err, _req, _res) => {
+              console.log('[Vite Proxy] 代理错误:', err.message);
+            });
+            proxy.on('proxyReq', (_proxyReq, req, _res) => {
+              console.log('[Vite Proxy] 转发请求:', req.method, req.url);
+            });
+            proxy.on('proxyRes', (proxyRes, req, _res) => {
+              console.log('[Vite Proxy] 收到响应:', proxyRes.statusCode, req.url);
+            });
+          },
         },
       },
     },

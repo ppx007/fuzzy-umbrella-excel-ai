@@ -1,6 +1,6 @@
 /**
  * 历史管理 Hook - 支持撤销/重做功能
- * 最多保存50条历史记录
+ * 完全重构版本 - 修复撤销/重做逻辑
  */
 
 import { useState, useCallback, useMemo } from 'react';
@@ -19,7 +19,7 @@ const DEFAULT_MAX_ENTRIES = 50;
  * 生成唯一ID
  */
 function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  return `history_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 }
 
 /**
@@ -32,6 +32,42 @@ function createSnapshot(data: StyledTableData, address: string, sheetName: strin
     sheetName,
     capturedAt: Date.now(),
   };
+}
+
+/**
+ * 撤销操作结果
+ */
+export interface UndoResult {
+  /** 是否成功 */
+  success: boolean;
+  /** 操作类型 */
+  operationType: OperationType;
+  /** 需要恢复的数据（如果是修改操作，这是修改前的数据；如果是创建操作，这是 null） */
+  restoreData: StyledTableData | null;
+  /** 表格地址 */
+  address: string;
+  /** 工作表名称 */
+  sheetName: string;
+  /** 操作描述 */
+  description: string;
+}
+
+/**
+ * 重做操作结果
+ */
+export interface RedoResult {
+  /** 是否成功 */
+  success: boolean;
+  /** 操作类型 */
+  operationType: OperationType;
+  /** 需要应用的数据 */
+  applyData: StyledTableData;
+  /** 表格地址 */
+  address: string;
+  /** 工作表名称 */
+  sheetName: string;
+  /** 操作描述 */
+  description: string;
 }
 
 /**
@@ -49,15 +85,24 @@ export function useHistory(maxEntries: number = DEFAULT_MAX_ENTRIES) {
   /**
    * 计算是否可以撤销/重做
    */
-  const updateCanUndoRedo = useCallback((entries: HistoryEntry[], currentIndex: number) => {
-    return {
-      canUndo: currentIndex >= 0,
-      canRedo: currentIndex < entries.length - 1,
-    };
-  }, []);
+  const updateCanUndoRedo = useCallback(
+    (entries: HistoryEntry[], currentIndex: number): { canUndo: boolean; canRedo: boolean } => {
+      return {
+        canUndo: currentIndex >= 0 && entries.length > 0,
+        canRedo: currentIndex < entries.length - 1,
+      };
+    },
+    []
+  );
 
   /**
    * 添加历史记录
+   * @param type 操作类型
+   * @param description 操作描述
+   * @param beforeData 操作前的数据（创建操作为 null）
+   * @param afterData 操作后的数据
+   * @param tableAddress 表格地址
+   * @param sheetName 工作表名称
    */
   const pushHistory = useCallback(
     (
@@ -69,7 +114,7 @@ export function useHistory(maxEntries: number = DEFAULT_MAX_ENTRIES) {
       sheetName: string
     ) => {
       setState(prev => {
-        // 如果当前不在最新位置，删除后面的历史记录
+        // 如果当前不在最新位置，删除后面的历史记录（因为新的操作会覆盖重做栈）
         const newEntries = prev.entries.slice(0, prev.currentIndex + 1);
 
         const entry: HistoryEntry = {
@@ -93,6 +138,15 @@ export function useHistory(maxEntries: number = DEFAULT_MAX_ENTRIES) {
         const newIndex = newEntries.length - 1;
         const { canUndo, canRedo } = updateCanUndoRedo(newEntries, newIndex);
 
+        console.log('[useHistory] pushHistory:', {
+          type,
+          description,
+          entriesCount: newEntries.length,
+          currentIndex: newIndex,
+          canUndo,
+          canRedo,
+        });
+
         return {
           ...prev,
           entries: newEntries,
@@ -107,21 +161,41 @@ export function useHistory(maxEntries: number = DEFAULT_MAX_ENTRIES) {
 
   /**
    * 撤销操作
-   * 返回要恢复的表格快照
+   * 返回需要恢复的状态信息
    */
-  const undo = useCallback((): TableSnapshot | null => {
-    let snapshotToRestore: TableSnapshot | null = null;
+  const undo = useCallback((): UndoResult | null => {
+    let result: UndoResult | null = null;
 
     setState(prev => {
-      if (!prev.canUndo || prev.currentIndex < 0) {
+      if (prev.currentIndex < 0 || prev.entries.length === 0) {
+        console.log('[useHistory] undo: 没有可撤销的操作');
         return prev;
       }
 
       const currentEntry = prev.entries[prev.currentIndex];
-      snapshotToRestore = currentEntry.beforeState;
-
       const newIndex = prev.currentIndex - 1;
+
+      // 构建撤销结果
+      result = {
+        success: true,
+        operationType: currentEntry.type,
+        // 如果 beforeState 为 null，表示这是创建操作，撤销后应该删除/清空
+        restoreData: currentEntry.beforeState?.data || null,
+        address: currentEntry.tableAddress,
+        sheetName: currentEntry.sheetName,
+        description: currentEntry.description,
+      };
+
       const { canUndo, canRedo } = updateCanUndoRedo(prev.entries, newIndex);
+
+      console.log('[useHistory] undo:', {
+        undoType: currentEntry.type,
+        description: currentEntry.description,
+        newIndex,
+        hasRestoreData: !!result.restoreData,
+        canUndo,
+        canRedo,
+      });
 
       return {
         ...prev,
@@ -131,26 +205,44 @@ export function useHistory(maxEntries: number = DEFAULT_MAX_ENTRIES) {
       };
     });
 
-    return snapshotToRestore;
+    return result;
   }, [updateCanUndoRedo]);
 
   /**
    * 重做操作
-   * 返回要恢复的表格快照
+   * 返回需要应用的状态信息
    */
-  const redo = useCallback((): TableSnapshot | null => {
-    let snapshotToRestore: TableSnapshot | null = null;
+  const redo = useCallback((): RedoResult | null => {
+    let result: RedoResult | null = null;
 
     setState(prev => {
-      if (!prev.canRedo || prev.currentIndex >= prev.entries.length - 1) {
+      if (prev.currentIndex >= prev.entries.length - 1) {
+        console.log('[useHistory] redo: 没有可重做的操作');
         return prev;
       }
 
       const newIndex = prev.currentIndex + 1;
       const entryToRedo = prev.entries[newIndex];
-      snapshotToRestore = entryToRedo.afterState;
+
+      // 构建重做结果
+      result = {
+        success: true,
+        operationType: entryToRedo.type,
+        applyData: entryToRedo.afterState.data,
+        address: entryToRedo.tableAddress,
+        sheetName: entryToRedo.sheetName,
+        description: entryToRedo.description,
+      };
 
       const { canUndo, canRedo } = updateCanUndoRedo(prev.entries, newIndex);
+
+      console.log('[useHistory] redo:', {
+        redoType: entryToRedo.type,
+        description: entryToRedo.description,
+        newIndex,
+        canUndo,
+        canRedo,
+      });
 
       return {
         ...prev,
@@ -160,7 +252,7 @@ export function useHistory(maxEntries: number = DEFAULT_MAX_ENTRIES) {
       };
     });
 
-    return snapshotToRestore;
+    return result;
   }, [updateCanUndoRedo]);
 
   /**
@@ -174,6 +266,7 @@ export function useHistory(maxEntries: number = DEFAULT_MAX_ENTRIES) {
       canUndo: false,
       canRedo: false,
     }));
+    console.log('[useHistory] clearHistory: 历史记录已清空');
   }, []);
 
   /**
@@ -197,8 +290,8 @@ export function useHistory(maxEntries: number = DEFAULT_MAX_ENTRIES) {
    * 跳转到指定历史位置
    */
   const goToEntry = useCallback(
-    (entryId: string): TableSnapshot | null => {
-      let snapshotToRestore: TableSnapshot | null = null;
+    (entryId: string): { entry: HistoryEntry; isForward: boolean } | null => {
+      let result: { entry: HistoryEntry; isForward: boolean } | null = null;
 
       setState(prev => {
         const targetIndex = prev.entries.findIndex(e => e.id === entryId);
@@ -207,7 +300,9 @@ export function useHistory(maxEntries: number = DEFAULT_MAX_ENTRIES) {
         }
 
         const targetEntry = prev.entries[targetIndex];
-        snapshotToRestore = targetEntry.afterState;
+        const isForward = targetIndex > prev.currentIndex;
+
+        result = { entry: targetEntry, isForward };
 
         const { canUndo, canRedo } = updateCanUndoRedo(prev.entries, targetIndex);
 
@@ -219,7 +314,7 @@ export function useHistory(maxEntries: number = DEFAULT_MAX_ENTRIES) {
         };
       });
 
-      return snapshotToRestore;
+      return result;
     },
     [updateCanUndoRedo]
   );

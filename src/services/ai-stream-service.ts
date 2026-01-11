@@ -103,77 +103,170 @@ export class AIStreamService {
   }
 
   /**
-   * 发送流式请求
+   * 发送流式请求（带自动重试机制）
    * @param messages 消息列表
    * @param callbacks 回调函数
+   * @param maxRetries 最大重试次数（默认3次）
    * @returns 完整响应文本
    */
-  async streamChat(messages: ChatMessage[], callbacks: StreamCallbacks = {}): Promise<string> {
-    // 创建新的 AbortController
-    this.abort(); // 先取消之前的请求
-    this.abortController = new AbortController();
-
+  async streamChat(
+    messages: ChatMessage[],
+    callbacks: StreamCallbacks = {},
+    maxRetries: number = 3
+  ): Promise<string> {
     const { onChunk, onComplete, onError, onStart } = callbacks;
 
-    // 设置超时
-    const timeoutId = setTimeout(() => {
-      this.abort();
-      const error = new Error(`请求超时 (${this.config.timeout / 1000}秒)`);
-      onError?.(error);
-    }, this.config.timeout);
+    let lastError: Error | null = null;
 
-    try {
-      onStart?.();
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      // 创建新的 AbortController
+      this.abort(); // 先取消之前的请求
+      this.abortController = new AbortController();
 
-      const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.config.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: this.config.model,
-          messages,
-          temperature: this.config.temperature,
-          max_tokens: this.config.maxTokens,
-          stream: true,
-        }),
-        signal: this.abortController.signal,
-      });
+      // 设置超时
+      const timeoutId = setTimeout(() => {
+        this.abort();
+      }, this.config.timeout);
 
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          `API请求失败: ${response.status} - ${errorData.error?.message || response.statusText}`
-        );
-      }
-
-      // 处理 SSE 流
-      const fullResponse = await this.processStream(response, onChunk);
-
-      onComplete?.(fullResponse);
-      return fullResponse;
-    } catch (error) {
-      clearTimeout(timeoutId);
-
-      if (error instanceof Error) {
-        if (error.name === 'AbortError') {
-          const abortError = new Error('请求已取消');
-          onError?.(abortError);
-          throw abortError;
+      try {
+        if (attempt === 1) {
+          onStart?.();
+        } else {
+          console.log(`[AIStreamService] 第 ${attempt}/${maxRetries} 次重试...`);
         }
-        onError?.(error);
-        throw error;
-      }
 
-      const unknownError = new Error('未知错误');
-      onError?.(unknownError);
-      throw unknownError;
-    } finally {
-      this.abortController = null;
+        const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.config.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: this.config.model,
+            messages,
+            temperature: this.config.temperature,
+            max_tokens: this.config.maxTokens,
+            stream: true,
+          }),
+          signal: this.abortController.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => '');
+          let errorMessage = response.statusText;
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.error?.message || errorMessage;
+          } catch {
+            if (errorText) {
+              errorMessage = errorText.substring(0, 200);
+            }
+          }
+
+          // 524 错误可以重试
+          if (response.status === 524) {
+            lastError = new Error(`API请求超时 (524)，第 ${attempt} 次尝试失败`);
+            console.warn(`[AIStreamService] ${lastError.message}，将重试...`);
+            if (attempt < maxRetries) {
+              const delay = attempt * 2000;
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue;
+            }
+            const finalError = new Error('API多次请求超时 (524)，服务器响应太慢，请稍后重试');
+            onError?.(finalError);
+            throw finalError;
+          }
+
+          // 401 错误不重试
+          if (response.status === 401) {
+            const authError = new Error('API密钥无效或已过期，请在设置中检查API密钥');
+            onError?.(authError);
+            throw authError;
+          }
+
+          // 429 错误可以重试
+          if (response.status === 429) {
+            lastError = new Error('请求过于频繁');
+            if (attempt < maxRetries) {
+              const delay = attempt * 3000;
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue;
+            }
+            const rateLimitError = new Error('请求过于频繁，请稍后重试');
+            onError?.(rateLimitError);
+            throw rateLimitError;
+          }
+
+          // 502, 503, 504 错误可以重试
+          if ([502, 503, 504].includes(response.status)) {
+            lastError = new Error(`服务器暂时不可用 (${response.status})`);
+            if (attempt < maxRetries) {
+              const delay = attempt * 2000;
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue;
+            }
+            const serverError = new Error(`服务器暂时不可用 (${response.status})，请稍后重试`);
+            onError?.(serverError);
+            throw serverError;
+          }
+
+          const apiError = new Error(`API请求失败: ${response.status} - ${errorMessage}`);
+          onError?.(apiError);
+          throw apiError;
+        }
+
+        // 处理 SSE 流
+        const fullResponse = await this.processStream(response, onChunk);
+
+        console.log(`[AIStreamService] 第 ${attempt} 次请求成功！`);
+        onComplete?.(fullResponse);
+        return fullResponse;
+      } catch (error) {
+        clearTimeout(timeoutId);
+
+        if (error instanceof Error) {
+          // 用户主动取消，不重试
+          if (error.name === 'AbortError') {
+            // 检查是否是超时导致的取消
+            if (attempt < maxRetries) {
+              lastError = new Error(`请求超时，第 ${attempt} 次尝试失败`);
+              console.warn(`[AIStreamService] ${lastError.message}，将重试...`);
+              await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+              continue;
+            }
+            const timeoutError = new Error('请求多次超时，请检查网络连接或稍后重试');
+            onError?.(timeoutError);
+            throw timeoutError;
+          }
+
+          // 如果是已经处理过的错误（包含特定关键词），直接抛出
+          if (
+            error.message.includes('API密钥') ||
+            error.message.includes('多次') ||
+            error.message.includes('请稍后重试')
+          ) {
+            throw error;
+          }
+
+          lastError = error;
+        }
+
+        // 其他错误，尝试重试
+        if (attempt < maxRetries) {
+          console.warn(`[AIStreamService] 请求失败，将进行第 ${attempt + 1} 次重试...`);
+          await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+          continue;
+        }
+      } finally {
+        this.abortController = null;
+      }
     }
+
+    const finalError = lastError || new Error('请求失败，请稍后重试');
+    onError?.(finalError);
+    throw finalError;
   }
 
   /**

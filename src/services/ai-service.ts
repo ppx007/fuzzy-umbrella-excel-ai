@@ -81,36 +81,201 @@ export class AIService {
   }
 
   /**
-   * 发送聊天请求
+   * 发送聊天请求（使用流式模式和自动重试机制）
    */
-  async chat(messages: ChatMessage[]): Promise<string> {
+  async chat(messages: ChatMessage[], maxRetries: number = 3): Promise<string> {
     if (!this.isAvailable()) {
       throw new Error('AI服务未配置，请检查API密钥和端点');
     }
 
-    const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.config.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: this.config.model,
-        messages,
-        temperature: 0.7,
-        max_tokens: 2048,
-      }),
-    });
+    const requestUrl = `${this.config.baseUrl}/chat/completions`;
+    const requestBody = {
+      model: this.config.model,
+      messages,
+      temperature: 0.7,
+      max_tokens: 4096,
+      stream: true, // 启用流式模式避免 Cloudflare 超时
+    };
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        `API请求失败: ${response.status} - ${errorData.error?.message || response.statusText}`
-      );
+    console.log('[AIService] 发送请求到:', requestUrl);
+    console.log('[AIService] 流式模式: 已启用');
+    console.log('[AIService] 最大重试次数:', maxRetries);
+
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 180000); // 180秒超时
+
+      try {
+        console.log(`[AIService] 尝试第 ${attempt}/${maxRetries} 次请求...`);
+
+        const response = await fetch(requestUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.config.apiKey}`,
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => '');
+          let errorMessage = response.statusText;
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.error?.message || errorMessage;
+          } catch {
+            if (errorText) {
+              errorMessage = errorText.substring(0, 200);
+            }
+          }
+
+          // 524 错误可以重试
+          if (response.status === 524) {
+            lastError = new Error(`API请求超时 (524)，第 ${attempt} 次尝试失败`);
+            console.warn(`[AIService] ${lastError.message}，将重试...`);
+            if (attempt < maxRetries) {
+              const delay = attempt * 2000;
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue;
+            }
+            throw new Error('API多次请求超时 (524)，服务器响应太慢，请稍后重试');
+          }
+
+          // 401 不重试
+          if (response.status === 401) {
+            throw new Error('API密钥无效或已过期，请在设置中检查API密钥');
+          }
+
+          // 429 可以重试
+          if (response.status === 429) {
+            lastError = new Error('请求过于频繁');
+            if (attempt < maxRetries) {
+              const delay = attempt * 3000;
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue;
+            }
+            throw new Error('请求过于频繁，请稍后重试');
+          }
+
+          // 502, 503, 504 可以重试
+          if ([502, 503, 504].includes(response.status)) {
+            lastError = new Error(`服务器暂时不可用 (${response.status})`);
+            if (attempt < maxRetries) {
+              const delay = attempt * 2000;
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue;
+            }
+            throw new Error(`服务器暂时不可用 (${response.status})，请稍后重试`);
+          }
+
+          throw new Error(`API请求失败: ${response.status} - ${errorMessage}`);
+        }
+
+        // 处理流式响应
+        const content = await this.processStreamResponse(response);
+
+        if (!content) {
+          throw new Error('AI 返回了空响应');
+        }
+
+        console.log(`[AIService] 第 ${attempt} 次请求成功！`);
+        console.log('[AIService] 响应长度:', content.length, '字符');
+        return content;
+      } catch (error) {
+        clearTimeout(timeoutId);
+
+        if (error instanceof Error) {
+          if (error.name === 'AbortError') {
+            lastError = new Error(`请求超时（180秒），第 ${attempt} 次尝试失败`);
+            console.warn(`[AIService] ${lastError.message}`);
+            if (attempt < maxRetries) {
+              continue;
+            }
+            throw new Error('请求多次超时（180秒），请检查网络连接或稍后重试');
+          }
+
+          // 如果是已经处理过的错误，直接抛出
+          if (error.message.includes('API密钥') || error.message.includes('多次')) {
+            throw error;
+          }
+
+          lastError = error;
+        }
+
+        console.error('[AIService] 请求失败:', error);
+
+        if (attempt < maxRetries) {
+          console.warn(`[AIService] 将进行第 ${attempt + 1} 次重试...`);
+          await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+          continue;
+        }
+      }
     }
 
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || '';
+    throw lastError || new Error('请求失败，请稍后重试');
+  }
+
+  /**
+   * 处理流式响应，将 SSE 数据聚合为完整内容
+   */
+  private async processStreamResponse(response: Response): Promise<string> {
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    let fullContent = '';
+    let buffer = '';
+
+    if (!reader) {
+      throw new Error('无法读取响应流');
+    }
+
+    try {
+      let chunkCount = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) break;
+
+        // 解码数据块
+        buffer += decoder.decode(value, { stream: true });
+
+        // 按行分割处理
+        const lines = buffer.split('\n');
+        // 保留最后一个可能不完整的行
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.trim() || !line.startsWith('data: ')) continue;
+
+          const data = line.slice(6); // 移除 'data: ' 前缀
+
+          if (data === '[DONE]') continue;
+
+          try {
+            const parsed = JSON.parse(data);
+            const content = parsed.choices?.[0]?.delta?.content;
+
+            if (content) {
+              fullContent += content;
+              chunkCount++;
+            }
+          } catch {
+            // 忽略 JSON 解析错误（可能是不完整的数据）
+          }
+        }
+      }
+
+      console.log(`[AIService] 流式响应完成，共 ${chunkCount} 个数据块`);
+    } finally {
+      reader.releaseLock();
+    }
+
+    return fullContent;
   }
 
   /**

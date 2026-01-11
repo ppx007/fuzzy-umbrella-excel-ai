@@ -2,7 +2,13 @@
  * 实体提取规则
  */
 
-import { EntityType, EntityRule, ExtractedEntities, ChartType, StatisticType } from '@/types';
+import {
+  EntityType,
+  EntityRule,
+  ExtractedEntities,
+  NlpChartType as ChartType,
+  StatisticType,
+} from '@/types';
 import { TemplateType, ColumnType } from '@/types';
 import { DateRange } from '@/types';
 import {
@@ -91,6 +97,14 @@ export const entityRules: EntityRule[] = [
       columnPatterns.notes,
     ],
     extractor: extractColumnTypes,
+  },
+
+  // 列名提取
+  {
+    id: 'column_names',
+    type: EntityType.COLUMN_NAMES,
+    patterns: [/[列栏][名称称]?\s*[:：]?\s*([^\n]+)/, /包含[列栏][名称称称]?\s*[:：]?\s*([^\n]+)/],
+    extractor: extractColumnNames,
   },
 ];
 
@@ -329,6 +343,41 @@ function extractColumnTypes(_match: RegExpMatchArray, context: string): ColumnTy
 }
 
 /**
+ * 提取列名
+ */
+function extractColumnNames(_match: RegExpMatchArray, context: string): string[] {
+  // 尝试从"列名: xxx、xxx"格式提取
+  const listMatch = context.match(/(?:列[名称称]?|栏[名称称]?)[：:\s]*([^\n]+)/);
+  if (listMatch) {
+    const listStr = listMatch[1];
+    // 分割列名
+    const names = listStr.split(/[,，、\s]+/).filter(name => {
+      // 过滤掉空字符串
+      return name.trim().length > 0;
+    });
+    if (names.length > 0) {
+      return names.map(name => name.trim());
+    }
+  }
+
+  // 尝试从"包含列名: xxx、xxx"格式提取
+  const includeMatch = context.match(/包含[列栏][名称称称]?[：:\s]*([^\n]+)/);
+  if (includeMatch) {
+    const listStr = includeMatch[1];
+    // 分割列名
+    const names = listStr.split(/[,，、\s]+/).filter(name => {
+      // 过滤掉空字符串
+      return name.trim().length > 0;
+    });
+    if (names.length > 0) {
+      return names.map(name => name.trim());
+    }
+  }
+
+  return [];
+}
+
+/**
  * 从文本中提取所有实体
  */
 export function extractEntities(input: string): ExtractedEntities {
@@ -368,6 +417,12 @@ export function extractEntities(input: string): ExtractedEntities {
   const columns = extractColumnTypes([] as unknown as RegExpMatchArray, input);
   if (columns.length > 0) {
     entities.columns = columns;
+  }
+
+  // 提取列名
+  const columnNames = extractColumnNames([] as unknown as RegExpMatchArray, input);
+  if (columnNames.length > 0) {
+    entities.columnNames = columnNames;
   }
 
   // 提取输出格式
